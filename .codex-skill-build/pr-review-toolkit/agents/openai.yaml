@@ -1,0 +1,7 @@
+interface:
+  display_name: "PR Review Toolkit"
+  short_description: "Manual PR review for bugs, tests, and design"
+  default_prompt: "Use $pr-review-toolkit to review my current changes for bugs, missing tests, silent failures, and design issues."
+
+policy:
+  allow_implicit_invocation: false

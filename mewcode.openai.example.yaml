@@ -1,0 +1,18 @@
+protocol: openai
+model: gpt-5
+base_url: https://letaicode.cn/codex
+api_key: your-api-key
+worker_enable_verify: false
+worker_background_threshold: 10s
+max_iterations: 30
+worktree_copy_files: settings.local.json,.env.local
+worktree_link_dirs: node_modules,.venv
+worktree_ttl: 7d
+
+# 权限规则不写在这个 LLM 配置文件中。
+# 用户规则：~/.mewcode/permissions.yaml
+# 项目规则：.mewcode/permissions.yaml
+# Hook 规则：~/.mewcode/hooks.yaml 和 .mewcode/hooks.yaml
+# 外部工具 server：.mewcode/servers.yaml
+# Worker 角色：~/.mewcode/workers 和 .mewcode/workers
+# Worktree 运行态目录：.mewcode/worktrees

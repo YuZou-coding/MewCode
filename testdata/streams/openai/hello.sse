@@ -1,0 +1,9 @@
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","delta":"Hello "}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","delta":"from OpenAI"}
+
+event: response.completed
+data: {"type":"response.completed"}
+

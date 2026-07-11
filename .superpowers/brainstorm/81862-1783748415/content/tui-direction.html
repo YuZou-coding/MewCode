@@ -1,0 +1,79 @@
+<style>
+  .terminal-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; }
+  .terminal-card { cursor:pointer; border:1px solid #30363d; border-radius:8px; overflow:hidden; background:#0d1117; transition:.18s ease; }
+  .terminal-card:hover { transform:translateY(-2px); border-color:#8b949e; }
+  .terminal-card.selected { outline:2px solid #d97757; border-color:#d97757; }
+  .term-head { display:flex; align-items:center; gap:6px; padding:9px 12px; background:#161b22; color:#8b949e; font:12px ui-monospace,monospace; }
+  .dot { width:8px; height:8px; border-radius:50%; background:#484f58; }
+  .term { min-height:430px; padding:14px; color:#c9d1d9; font:12px/1.52 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:0; }
+  .dim { color:#7d8590; } .brand { color:#e08b6d; font-weight:700; } .user { color:#f0f3f6; font-weight:700; }
+  .green { color:#56d364; } .yellow { color:#e3b341; } .blue { color:#79c0ff; } .red { color:#ff7b72; }
+  .gap { height:12px; } .rule { border-top:1px solid #30363d; margin:10px 0; }
+  .tool { margin:7px 0 7px 12px; border-left:2px solid #30363d; padding-left:10px; }
+  .input { margin-top:12px; padding:8px 10px; border:1px solid #484f58; border-radius:5px; color:#f0f3f6; }
+  .status { margin:10px -14px -14px; padding:6px 12px; background:#161b22; color:#8b949e; }
+  .bubble { background:#161b22; border-radius:6px; padding:8px 10px; margin:6px 0; }
+  .label { margin:0 0 4px; color:#7d8590; font-size:10px; text-transform:uppercase; }
+  .stage { display:inline-block; color:#d2a8ff; margin-right:7px; }
+  @media(max-width:1100px){.terminal-grid{grid-template-columns:1fr}.term{min-height:auto}}
+</style>
+
+<h2>MewCode TUI 应该往哪个方向走？</h2>
+<p class="subtitle">三版都保留流式响应、命令面板和权限确认。请选择你最希望每天使用的整体气质。</p>
+
+<div class="terminal-grid">
+  <div class="terminal-card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="term-head"><span class="dot"></span><span class="dot"></span><span class="dot"></span> A · Claude 风轻量流</div>
+    <div class="term">
+      <div><span class="brand">MewCode</span> <span class="dim">v0.8 · ~/Documents/shop</span></div>
+      <div class="gap"></div>
+      <div><span class="user">❯</span> 修复订单列表的分页问题</div>
+      <div class="gap"></div>
+      <div><span class="brand">●</span> 我先检查分页状态和 API 参数。</div>
+      <div class="tool"><span class="green">✓</span> Read <span class="dim">web/orders.tsx</span><br><span class="green">✓</span> Search <span class="dim">pageSize · 4 matches</span><br><span class="yellow">●</span> Edit <span class="dim">web/orders.tsx</span></div>
+      <div><span class="brand">●</span> 问题是翻页时旧请求覆盖了新状态。我已加入请求序号保护，并补了回归测试。</div>
+      <div class="gap"></div>
+      <div class="dim"><span class="green">✓</span> Tests 18 passed <span style="float:right">2.8k tokens · 12s</span></div>
+      <div class="input"><span class="brand">❯</span> <span class="dim">Ask MewCode…</span><span class="green">▌</span></div>
+      <div class="status"><span class="green">execute</span> · main · 42% context <span style="float:right">/ for commands</span></div>
+    </div>
+  </div>
+
+  <div class="terminal-card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="term-head"><span class="dot"></span><span class="dot"></span><span class="dot"></span> B · 结构化工作台</div>
+    <div class="term">
+      <div><span class="brand">MEWCODE</span> <span class="dim">workspace / shop</span></div>
+      <div class="rule"></div>
+      <div class="label">YOU</div><div class="bubble">修复订单列表的分页问题</div>
+      <div class="label">AGENT</div><div class="bubble">我先检查分页状态和 API 参数。</div>
+      <div class="label">ACTIVITY</div>
+      <div class="bubble"><span class="green">DONE</span> read_file <span class="dim">web/orders.tsx</span><br><span class="green">DONE</span> search_code <span class="dim">pageSize</span><br><span class="yellow">RUN</span> edit_file <span class="dim">web/orders.tsx · 1.4s</span></div>
+      <div class="label">RESULT</div><div class="bubble">问题是翻页时旧请求覆盖了新状态。我已加入请求序号保护，并补了回归测试。</div>
+      <div class="input"><span class="blue">YOU</span> <span class="dim">输入消息或 /command</span><span class="green">▌</span></div>
+      <div class="status">MODE <span class="green">EXECUTE</span>　SESSION a92f　MSG 16 <span style="float:right">IN 2.1k OUT 0.7k</span></div>
+    </div>
+  </div>
+
+  <div class="terminal-card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="term-head"><span class="dot"></span><span class="dot"></span><span class="dot"></span> C · 阶段化任务流</div>
+    <div class="term">
+      <div><span class="brand">MewCode</span> <span class="dim">/ shop</span> <span class="green" style="float:right">EXECUTE</span></div>
+      <div class="gap"></div>
+      <div><span class="user">You</span><br>修复订单列表的分页问题</div>
+      <div class="gap"></div>
+      <div><span class="stage">01 UNDERSTAND</span><span class="dim">2.1s</span><br>检查分页状态和 API 参数</div>
+      <div class="gap"></div>
+      <div><span class="stage">02 INSPECT</span><span class="dim">4.8s</span><br><span class="green">✓</span> web/orders.tsx<br><span class="green">✓</span> pageSize · 4 matches</div>
+      <div class="gap"></div>
+      <div><span class="stage">03 CHANGE</span><span class="yellow">running</span><br>web/orders.tsx <span class="green">+12</span> <span class="red">-4</span></div>
+      <div class="gap"></div>
+      <div><span class="stage">04 REPORT</span><br>旧请求覆盖新状态。已加入请求序号保护并补测试。</div>
+      <div class="input"><span class="brand">›</span> <span class="dim">What should we do next?</span><span class="green">▌</span></div>
+      <div class="status">main · clean　ctx 42% <span style="float:right">12s · esc interrupt · / menu</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:20px">
+  <p><strong>我的建议：A。</strong> 它最接近 Claude Code 的“内容优先”体验：少边框、少标签、工具过程自然嵌入对话，长任务也不会像日志墙。B 信息最清楚但更像运维面板；C 很有过程感，但需要 Agent 可靠提供阶段语义。</p>
+</div>

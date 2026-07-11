@@ -1,0 +1,9 @@
+event: content_block_delta
+data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"Hello "}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"from Anthropic"}}
+
+event: message_stop
+data: {"type":"message_stop"}
+
