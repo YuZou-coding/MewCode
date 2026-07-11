@@ -94,6 +94,28 @@ func TestBuiltinsCompletionIncludesWorkers(t *testing.T) {
 	}
 }
 
+func TestBuiltinsVersionCommand(t *testing.T) {
+	r, err := Builtins()
+	if err != nil {
+		t.Fatalf("Builtins returned error: %v", err)
+	}
+	if got := r.Complete("/ver").Replacement; got != "/version" {
+		t.Fatalf("version completion = %q", got)
+	}
+	if _, ok := r.Lookup("/v"); ok {
+		t.Fatal("unexpected /v alias")
+	}
+
+	c := &fakeController{}
+	result := Dispatch(context.Background(), r, c, "/version")
+	if got := strings.Join(result.Messages, "\n"); got != "MewCode dev" {
+		t.Fatalf("version output = %q", got)
+	}
+	if help := r.Help(""); !strings.Contains(help, "/version") {
+		t.Fatalf("help output missing /version: %q", help)
+	}
+}
+
 func TestPanelMatchesCommandsByNameAliasAndGroup(t *testing.T) {
 	r, err := Builtins()
 	if err != nil {

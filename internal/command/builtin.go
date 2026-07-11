@@ -3,6 +3,8 @@ package command
 import (
 	"context"
 	"strings"
+
+	"mewcode/internal/version"
 )
 
 func Builtins() (*Registry, error) {
@@ -22,6 +24,7 @@ func Builtins() (*Registry, error) {
 		{Name: "worktrees", Description: "查看和管理隔离工作目录", Usage: "/worktrees [create|list|enter|exit|status|delete]", Type: TypeUIState, ArgHint: "create|list|enter|exit|status|delete", Subcommands: []string{"create", "list", "enter", "exit", "status", "delete"}, Handler: worktreesHandler},
 		{Name: "teams", Description: "查看和管理 Team 小组", Usage: "/teams [create|list|show|start|stop|send|status|scheduler]", Type: TypeUIState, ArgHint: "create|list|show|start|stop|send|status|scheduler", Subcommands: []string{"create", "list", "show", "start", "stop", "send", "status", "scheduler"}, Handler: teamsHandler},
 		{Name: "status", Aliases: []string{"st"}, Description: "显示综合状态", Usage: "/status", Type: TypeLocal, Handler: statusHandler},
+		{Name: "version", Description: "显示 MewCode 版本", Usage: "/version", Type: TypeLocal, Handler: versionHandler},
 		{Name: "exit", Aliases: []string{"quit", "q"}, Description: "退出 MewCode", Usage: "/exit", Type: TypeLocal, Handler: exitHandler},
 	} {
 		if err := r.Register(cmd); err != nil {
@@ -99,6 +102,10 @@ func teamsHandler(ctx context.Context, controller Controller, inv Invocation) Re
 func statusHandler(ctx context.Context, controller Controller, inv Invocation) Result {
 	state := controller.Status()
 	return Messagef("mode=%s session=%s messages=%d tokens(in=%d out=%d cache_read=%d cache_write=%d) hooks(rules=%d warnings=%d) workers(running=%d completed=%d) worktree(name=%s path=%s main=%s cleaned=%d) team(active=%s lead=%s running=%d pending=%d incomplete=%d scheduler=%v)", state.Mode, state.SessionID, state.MessageCount, state.LastUsage.InputTokens, state.LastUsage.OutputTokens, state.LastUsage.CacheReadTokens, state.LastUsage.CacheWriteTokens, state.HookRules, state.HookWarnings, state.WorkerRunning, state.WorkerCompleted, state.WorktreeName, state.WorktreePath, state.WorktreeMainRoot, state.WorktreeCleaned, state.TeamActive, state.TeamLead, state.TeamRunning, state.TeamPending, state.TeamIncomplete, state.TeamScheduler)
+}
+
+func versionHandler(ctx context.Context, controller Controller, inv Invocation) Result {
+	return Message(version.String())
 }
 
 func exitHandler(ctx context.Context, controller Controller, inv Invocation) Result {
