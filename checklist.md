@@ -1,38 +1,12 @@
-# MewCode Claude Code 风格全屏 TUI 验收清单
+# MewCode 版本命令验收清单
 
-- [x] `spec.md`、`tasks.md`、`checklist.md` 均为“Claude Code 风格全屏 TUI”本轮内容。
-- [x] `internal/tuiapp` 将 transcript、主题、面板和布局职责从主 Model 中拆分，且 `model.go` 不再包含零散颜色常量。
-- [x] 启动 `go run ./cmd/mewcode` 后，首屏始终显示完整猫形 ASCII、`MewCode`、项目信息和常用命令。
-- [x] 提交第一条消息并收到回复后，完整欢迎块仍保留在 transcript 顶部且只出现一次。
-- [x] 用户消息使用 `❯` 标识，助手消息使用品牌色标识，二者无需 `You >` 与 `MewCode >` 重复占据视觉宽度。
-- [x] 连续至少 `3` 个文本 delta 只更新一个 assistant block，不生成三条碎片消息。
-- [x] thinking 期间显示动态阶段与耗时，界面和 `Transcript()` 均不包含 raw thinking 内容。
-- [x] 工具开始时显示 running 状态、工具名和目标；完成后同一 block 更新为成功状态并显示耗时。
-- [x] 成功工具结果默认不展开完整内容，只显示工具名、目标、状态和耗时。
-- [x] 工具失败、权限拒绝或 Hook 拦截时自动显示原因，且长原因最多展示三行。
-- [x] 一轮完成后显示低对比度耗时和 token usage，usage 不混入助手正文。
-- [x] 用户未滚动时，新流式输出会自动保持 viewport 在底部。
-- [x] 用户向上滚动后，新输出不改变当前阅读位置，并出现 `New output` 返回底部提示。
-- [x] 触发返回底部操作后提示消失，后续流式输出恢复自动跟随。
-- [x] 输入 `/` 时，输入框上方显示不超过 `8` 条命令候选。
-- [x] 输入 `/wo` 时至少能看到 `/workers` 和 `/worktrees`，候选随输入实时过滤。
-- [x] 命令面板支持 `↑/↓` 改变高亮项、`Tab` 补全、`Enter` 填入并关闭面板、`Esc` 关闭且保留当前输入；有 `ArgHint` 时自动追加空格，再次按 `Enter` 才执行。
-- [x] busy、普通文本输入和权限确认状态下，命令面板不会错误显示。
-- [x] 权限请求显示多行面板，包含 `Permission required`、工具名、路径或命令、原因及 `n/y/s/a` 操作。
-- [x] 权限面板不设置固定背景色，每一行使用黄色 `│` 警示线，并以语义色区分拒绝与允许操作。
-- [x] 命令面板不设置固定背景色，每一行使用灰色 `│`，选中项只使用品牌色前景和粗体。
-- [x] `internal/tuiapp` 生产代码不包含 `.Background(` 固定背景样式。
-- [x] 权限目标超过当前宽度时采用中间截断，任何一行均不超过终端宽度。
-- [x] 选择 `y` 后面板消失，transcript 出现一次性允许记录；`n/s/a` 分别留下对应拒绝、会话允许和永久允许记录。
-- [x] 权限面板打开时，普通中文和英文按键不会进入输入框。
-- [x] 80 列终端中 header、transcript、面板、输入区和状态行无重叠或横向溢出。
-- [x] 40 列窄终端中状态行按优先级隐藏低价值字段，仍能看到当前模式和 activity。
-- [x] 宽屏状态行显示模式、context 使用、Git 分支、耗时和命令提示；没有数据的字段不显示伪值。
-- [x] 中文连续输入、左右移动、Home/End、Backspace/Delete 均通过现有测试。
-- [x] busy 期间普通输入仍禁用，权限 `n/y/s/a` 仍可响应，Agent 完成后输入恢复。
-- [x] fallback 行式 TUI 的输出与按键语义保持不变。
-- [x] 端到端 fake Provider 依次发送 thinking、文本、工具开始、工具结果和最终文本时，界面按顺序更新且最终正文完整。
+- [x] `go test ./internal/version ./internal/command` 通过。
 - [x] `go test -count=1 ./...` 通过。
-- [x] 主 Agent 默认最多运行 `30` 轮，`mewcode.yaml` 的 `max_iterations` 可覆盖默认值。
-- [x] 每轮运行时状态栏显示 `iteration <current>/<max>`，权限面板处理后不再追加重复的 `permission required for ...` transcript 行。
-- [x] 达到轮数上限后发起一次 tools 数量为 `0` 的最终报告请求；Provider 异常返回的工具调用不会被展示或执行。
+- [x] 未注入版本的构建执行 `/version` 后输出严格等于 `MewCode dev`。
+- [x] 使用 `-ldflags "-X mewcode/internal/version.Value=v1.2.3"` 构建后，执行 `/version` 输出严格等于 `MewCode v1.2.3`。
+- [x] `/help` 输出包含 `/version`、用途说明和用法。
+- [x] 输入 `/ver` 时补全结果为 `/version`。
+- [x] `/v` 不会解析为已注册命令，未知命令提示保持现有行为。
+- [x] 版本命令不显示 Git commit、构建时间、Go 版本、操作系统或 CPU 架构。
+- [x] `README.md` 同时包含 `/version` 用法和构建时版本注入示例。
+- [x] 端到端启动 MewCode，输入 `/version` 能看到当前版本，且请求不会发送给模型。

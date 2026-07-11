@@ -4,10 +4,35 @@ import (
 	"bytes"
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestBuiltBinaryReportsInjectedVersion(t *testing.T) {
+	bin := filepath.Join(t.TempDir(), "mewcode")
+	build := exec.Command("go", "build", "-ldflags", "-X mewcode/internal/version.Value=v1.2.3", "-o", bin, ".")
+	if output, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build binary: %v\n%s", err, output)
+	}
+
+	project := t.TempDir()
+	config := "protocol: openai\nmodel: test\nbase_url: http://provider.invalid\napi_key: test\n"
+	if err := os.WriteFile(filepath.Join(project, "mewcode.yaml"), []byte(config), 0600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	cmd := exec.Command(bin)
+	cmd.Dir = project
+	cmd.Stdin = strings.NewReader("/version\n/exit\n")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("run binary: %v\n%s", err, output)
+	}
+	if !strings.Contains(string(output), "MewCode v1.2.3") {
+		t.Fatalf("output missing injected version: %q", output)
+	}
+}
 
 func TestSetupGlobalHelpDocumentsCopyPolicy(t *testing.T) {
 	var out bytes.Buffer
