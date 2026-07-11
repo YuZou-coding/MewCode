@@ -62,6 +62,35 @@ func (p *fakeProvider) StreamChat(ctx context.Context, messages []chat.Message, 
 	return events, errs
 }
 
+func TestLoopHandlesVersionWithoutProviderRequest(t *testing.T) {
+	registry, err := tool.DefaultRegistry()
+	if err != nil {
+		t.Fatalf("DefaultRegistry returned error: %v", err)
+	}
+	fp := &fakeProvider{}
+	var out strings.Builder
+
+	err = Loop{
+		Input:       strings.NewReader("/version\n/exit\n"),
+		Output:      &out,
+		Errors:      io.Discard,
+		Session:     chat.NewSession(),
+		Provider:    fp,
+		Registry:    registry,
+		Tools:       registry.Definitions(),
+		NoTypeDelay: true,
+	}.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if !strings.Contains(out.String(), "MewCode dev") {
+		t.Fatalf("output missing version: %q", out.String())
+	}
+	if len(fp.requests) != 0 {
+		t.Fatalf("provider requests = %d, want 0", len(fp.requests))
+	}
+}
+
 func TestLoopExecutesOneToolAndFeedsResultBack(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "README.md")
