@@ -3,6 +3,7 @@ package tui
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -792,19 +793,6 @@ func (l Loop) runAgentTurn(ctx context.Context, scanner *bufio.Scanner, output i
 				})
 			}
 		case agent.EventPermissionRequest:
-			if _, err := fmt.Fprintf(output, "\nMewCode > permission required for %s", event.ToolName); err != nil {
-				return err
-			}
-			if event.PermissionPath != "" {
-				if _, err := fmt.Fprintf(output, " path=%s", event.PermissionPath); err != nil {
-					return err
-				}
-			}
-			if event.PermissionCommand != "" {
-				if _, err := fmt.Fprintf(output, " command=%s", event.PermissionCommand); err != nil {
-					return err
-				}
-			}
 		case agent.EventError:
 			if event.Error != nil {
 				_, _ = fmt.Fprintf(errorsOut, "%v\n", event.Error)
@@ -968,11 +956,11 @@ func emptyNote(content string) string {
 
 func permissionPrompt(scan func() bool, text func() string, output io.Writer) agent.PermissionPromptFunc {
 	return func(ctx context.Context, request permissions.Request, decision permissions.Decision) permissions.HITLChoice {
-		prompt := "\nAllow %s? [n] deny [y] allow once [s] allow session [a] allow always: "
+		prompt := "\nMewCode > permission required for %s%s\nAllow %s? [n] deny [y] allow once [s] allow session [a] allow always: "
 		if decision.Mode == permissions.ModeStrict {
-			prompt = "\nAllow %s? [n] deny [y] allow once: "
+			prompt = "\nMewCode > permission required for %s%s\nAllow %s? [n] deny [y] allow once: "
 		}
-		if _, err := fmt.Fprintf(output, prompt, request.Tool); err != nil {
+		if _, err := fmt.Fprintf(output, prompt, request.Tool, permissionRequestDetail(request), request.Tool); err != nil {
 			return permissions.HITLDeny
 		}
 		if !scan() {
@@ -995,6 +983,21 @@ func permissionPrompt(scan func() bool, text func() string, output io.Writer) ag
 			return permissions.HITLDeny
 		}
 	}
+}
+
+func permissionRequestDetail(request permissions.Request) string {
+	var args map[string]any
+	_ = json.Unmarshal(request.Arguments, &args)
+	if path, ok := args["path"].(string); ok && path != "" {
+		return " path=" + path
+	}
+	if root, ok := args["root"].(string); ok && root != "" {
+		return " path=" + root
+	}
+	if command, ok := args["command"].(string); ok && command != "" {
+		return " command=" + command
+	}
+	return ""
 }
 
 func confirmTool(scan func() bool, text func() string, output io.Writer) agent.ConfirmToolFunc {
