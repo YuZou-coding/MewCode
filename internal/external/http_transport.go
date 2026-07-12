@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 )
 
 type HTTPDoer interface {
@@ -15,9 +16,11 @@ type HTTPDoer interface {
 }
 
 type HTTPTransport struct {
-	url     string
-	headers map[string]string
-	client  HTTPDoer
+	url       string
+	headers   map[string]string
+	client    HTTPDoer
+	mu        sync.Mutex
+	sessionID string
 }
 
 func NewHTTPTransport(url string, headers map[string]string, client HTTPDoer) *HTTPTransport {
@@ -62,6 +65,12 @@ func (t *HTTPTransport) send(ctx context.Context, data []byte) (*http.Response, 
 	for name, value := range t.headers {
 		req.Header.Set(name, value)
 	}
+	t.mu.Lock()
+	sessionID := t.sessionID
+	t.mu.Unlock()
+	if sessionID != "" {
+		req.Header.Set("Mcp-Session-Id", sessionID)
+	}
 	resp, err := t.client.Do(req)
 	if err != nil {
 		return nil, err
@@ -69,6 +78,11 @@ func (t *HTTPTransport) send(ctx context.Context, data []byte) (*http.Response, 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		_ = resp.Body.Close()
 		return nil, fmt.Errorf("http status %d", resp.StatusCode)
+	}
+	if nextSessionID := resp.Header.Get("Mcp-Session-Id"); nextSessionID != "" {
+		t.mu.Lock()
+		t.sessionID = nextSessionID
+		t.mu.Unlock()
 	}
 	return resp, nil
 }

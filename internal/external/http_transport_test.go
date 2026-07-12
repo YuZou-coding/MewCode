@@ -88,3 +88,46 @@ func TestHTTPTransportAddsHeadersAndRedactsErrorBody(t *testing.T) {
 		t.Fatalf("secret leaked in error: %v", err)
 	}
 }
+
+func TestHTTPTransportReusesMCPSessionID(t *testing.T) {
+	requests := 0
+	transport := NewHTTPTransport("http://server.test/mcp", nil, roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		requests++
+		switch requests {
+		case 1:
+			if got := req.Header.Get("Mcp-Session-Id"); got != "" {
+				t.Fatalf("initial request session id = %q", got)
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header: http.Header{
+					"Content-Type":                  []string{"text/event-stream"},
+					"Mcp-Session-Id":                []string{"session-123"},
+					"Access-Control-Expose-Headers": []string{"Mcp-Session-Id"},
+				},
+				Body: io.NopCloser(strings.NewReader("data: {\"jsonrpc\":\"2.0\",\"id\":\"1\",\"result\":{\"ok\":true}}\n\n")),
+			}, nil
+		case 2, 3:
+			if got := req.Header.Get("Mcp-Session-Id"); got != "session-123" {
+				t.Fatalf("request %d session id = %q", requests, got)
+			}
+			return &http.Response{
+				StatusCode: http.StatusAccepted,
+				Body:       io.NopCloser(strings.NewReader("")),
+			}, nil
+		default:
+			t.Fatalf("unexpected request %d", requests)
+		}
+		return nil, nil
+	}))
+
+	if _, err := transport.SendAndReceive(context.Background(), []byte(`{"jsonrpc":"2.0","id":"1","method":"initialize"}`)); err != nil {
+		t.Fatalf("initialize returned error: %v", err)
+	}
+	if err := transport.Send(context.Background(), []byte(`{"jsonrpc":"2.0","method":"notifications/initialized"}`)); err != nil {
+		t.Fatalf("notify returned error: %v", err)
+	}
+	if err := transport.Send(context.Background(), []byte(`{"jsonrpc":"2.0","method":"notifications/ping"}`)); err != nil {
+		t.Fatalf("second send returned error: %v", err)
+	}
+}
