@@ -1,51 +1,47 @@
-# MewCode 通用 MCP OAuth 与权限记忆规格
+# MewCode 通用 MCP 工具路由规格
 
 ## 背景
 
-MewCode 已支持 stdio 与 HTTP MCP tools 基础流程，但 HTTP MCP 只能使用静态 Header 认证。Context7 这类遵循 MCP Authorization 规范的 server 可通过 OAuth 登录，不应要求用户手动维护 API key。与此同时，用户选择本会话允许或永久允许某类工具后，MewCode 不应因为无关参数变化反复询问相同权限。
+MewCode 已支持 lazy MCP discovery：启动时只加载 MCP 配置，模型需要远端能力时通过 `tool_search` 搜索并加载工具。但当前模型只得到一条泛化提示，容易在需要外部能力时直接依赖记忆或本地 shell，不能稳定判断何时应该先发现 MCP 工具。
+
+这不是 React 或 Context7 的单点问题，而是所有通用 MCP 能力的路由问题：官方文档、浏览器、数据库、Issue 系统、云服务、知识库、设计系统、SaaS API 等都需要被模型主动发现和选择。
 
 ## 目标用户
 
-- 使用需要 OAuth 登录的 HTTP MCP server 的 MewCode 用户。
-- 需要同时接入多个标准 HTTP MCP server 的开发者。
-- 希望权限确认结果符合“工具、路径、命令”直觉边界的终端用户。
+- 在 MewCode 中配置多个 MCP server 的开发者。
+- 希望模型自动选择合适外部能力，而不是手动提示具体工具名的用户。
+- 需要最新文档、外部系统状态或专用数据源的终端 Coding Agent 用户。
 
 ## 能力清单
 
-- HTTP MCP server 返回 OAuth 401 时，MewCode 可按 MCP Authorization 规范发现授权信息。
-- MewCode 使用浏览器登录、本地 loopback 回调和 PKCE 完成 OAuth 授权码流程。
-- OAuth token 按 server URL 缓存在 `~/.mewcode/oauth/`，重启后可复用。
-- access token 过期时优先使用 refresh token 刷新；刷新失败时重新触发浏览器登录。
-- 后续 HTTP MCP 请求自动携带 `Authorization: Bearer <token>`。
-- OAuth token、授权码、refresh token、client secret 不进入日志、错误、工具结果或仓库。
-- stdio MCP 不走 OAuth 流程，继续由命令环境自行处理凭据。
-- 对没有路径和命令边界的工具，本会话允许/永久允许按工具名记忆，避免同一工具因参数变化重复询问。
-- 对文件工具仍按代表路径记忆；对命令工具仍按命令模式记忆。
+- 模型在任务需要外部系统、当前信息、官方文档、远端数据源或专用服务时，会优先考虑 `tool_search`。
+- MCP server 配置可声明描述、能力分类、关键词和示例任务，帮助 lazy discovery 在不连接全部 server 前做粗筛。
+- `tool_search` 同时利用 server 元数据和远端工具描述做匹配。
+- `tool_search` 返回候选工具的推荐顺序、匹配原因和能力分类，帮助模型选择下一步工具。
+- 多个候选工具同时匹配时，结果按相关性排序；模型默认选择推荐项，高风险或同分歧义时再询问用户。
+- 找不到合适 MCP 工具时，模型必须明确说明未发现合适工具，再使用可用上下文或模型知识回退。
+- 现有无元数据 MCP 配置继续可用，保持向后兼容。
 
 ## 非功能要求
 
-- OAuth 实现遵循 MCP `2025-06-18` Authorization 规范中的 OAuth 2.1、Protected Resource Metadata、Authorization Server Metadata、PKCE 和 Resource Indicators 要求。
-- OAuth 客户端不写死 Context7；server URL、metadata、client registration、token endpoint 都通过标准发现得到。
-- token 缓存文件权限为 `0600`，目录权限为 `0700`。
-- 用户取消登录、浏览器打开失败、metadata 缺失、动态注册失败、token 刷新失败都返回可诊断但不含密钥的错误。
-- 权限记忆规则必须有自动化测试覆盖，证明 `tool_search` 参数变化不会重复询问。
+- 不为 React、Context7 或任何单一 server 写死特殊逻辑。
+- 不在启动阶段连接 MCP server，保持 lazy discovery。
+- 匹配和排序逻辑应可测试、可解释、稳定。
+- 新元数据不能影响认证 Header、环境变量解析或已有 stdio/http transport 行为。
+- 工具返回不泄露密钥、Header 值或环境变量内容。
 
 ## 设计骨架
 
-- `internal/external/oauth.go` 负责 OAuth discovery、PKCE、loopback callback、token exchange、refresh 和 token store。
-- `HTTPTransport` 在收到 401 且存在 OAuth metadata 时调用 OAuth provider 获取 token，并带 token 重试一次请求。
-- OAuth token store 以 server URL 的 SHA-256 作为文件名，避免路径非法字符和泄漏 server 细节。
-- `ServerConfig` 保持静态 headers 兼容；未配置 headers 时也可通过 401 自动 OAuth。
-- 权限规则生成仍集中在 `permissions.RuleForRequest`，仅调整无路径/无命令工具的 fallback 行为。
+- 稳定系统提示增加通用 MCP 路由规则：遇到外部能力需求时先发现工具，不能静默假装查过。
+- MCP server 配置增加可选元数据字段：`description`、`capabilities`、`keywords`、`examples`。
+- `tool_search` 先根据 server 名称和元数据粗筛候选 server；必要时再连接候选 server 获取远端工具列表。
+- 匹配结果对每个工具返回本地工具名、server、远端描述、能力分类、匹配原因、分数和推荐标记。
+- 保持精确选择 `select:external_<server>_<tool>` 的行为：只连接匹配 server，无法解析 server 时返回 `tool_not_found`。
 
 ## 不做范围
 
-- 不为 stdio transport 实现 OAuth。
-- 不实现 MCP resources/prompts 的一等能力。
-- 不实现多个 authorization server 的交互式选择；默认选择 metadata 中第一个。
-- 不实现手动粘贴 token/code 的备用 UI。
-- 不把 token 同步到项目配置或会话文件。
-
-## 完成定义
-
-见 [checklist.md](checklist.md)。
+- 不实现自动联网搜索 MCP marketplace。
+- 不自动安装或修改用户 MCP server 配置。
+- 不改变 MCP 协议生命周期、认证、transport 或 tool result 回灌机制。
+- 不引入复杂向量检索或机器学习排序。
+- 不改变权限系统对远端工具调用的检查。

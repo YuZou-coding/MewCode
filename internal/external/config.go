@@ -15,14 +15,18 @@ const (
 )
 
 type ServerConfig struct {
-	Name      string
-	Transport string
-	Command   string
-	Args      []string
-	URL       string
-	Env       map[string]string
-	Headers   map[string]string
-	TimeoutMS int
+	Name         string
+	Transport    string
+	Description  string
+	Capabilities []string
+	Keywords     []string
+	Examples     []string
+	Command      string
+	Args         []string
+	URL          string
+	Env          map[string]string
+	Headers      map[string]string
+	TimeoutMS    int
 }
 
 func ServersFile(root string) string {
@@ -258,6 +262,14 @@ func assignConfigField(server *ServerConfig, key string, value string) error {
 		server.Name = value
 	case "transport":
 		server.Transport = value
+	case "description":
+		server.Description = value
+	case "capabilities":
+		server.Capabilities = parseInlineList(value)
+	case "keywords":
+		server.Keywords = parseInlineList(value)
+	case "examples":
+		server.Examples = parseInlineList(value)
 	case "command":
 		server.Command = value
 	case "url":

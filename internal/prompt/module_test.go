@@ -32,6 +32,11 @@ func TestDefaultModulesContainExpectedResponsibilities(t *testing.T) {
 			t.Fatalf("global instruction missing %q: %s", want, got)
 		}
 	}
+	for _, want := range []string{"最新或官方文档", "外部 SaaS/API", "浏览器实时状态", "数据库", "Issue 系统", "云服务", "项目外知识库", "未发现合适 MCP 工具"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("global MCP routing instruction missing %q: %s", want, got)
+		}
+	}
 }
 
 func TestEnvironmentMessageIsDynamicButGlobalInstructionIsStable(t *testing.T) {

@@ -70,6 +70,82 @@ func TestExternalHTTPToolEndToEnd(t *testing.T) {
 	}
 }
 
+func TestToolSearchRoutesDocumentationQueryByServerMetadataEndToEnd(t *testing.T) {
+	tempDir := t.TempDir()
+	writeModelConfig(t, tempDir)
+	counts := map[string]map[string]int{}
+	externalHTTP := &scriptedExternalHTTP{handler: func(w http.ResponseWriter, r *http.Request, _ map[string]int) {
+		var req map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode external request: %v", err)
+		}
+		host := r.URL.Host
+		if counts[host] == nil {
+			counts[host] = map[string]int{}
+		}
+		method := req["method"].(string)
+		counts[host][method]++
+		w.Header().Set("Content-Type", "text/event-stream")
+		switch method {
+		case "initialize":
+			fmt.Fprintf(w, "data: {\"jsonrpc\":\"2.0\",\"id\":%q,\"result\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"serverInfo\":{\"name\":%q,\"version\":\"1\"}}}\n\n", req["id"], host)
+		case "notifications/initialized":
+		case "tools/list":
+			if host == "docs.test" {
+				fmt.Fprintf(w, "data: {\"jsonrpc\":\"2.0\",\"id\":%q,\"result\":{\"tools\":[{\"name\":\"resolve_library_id\",\"description\":\"Resolve packages for current official documentation\",\"inputSchema\":{\"type\":\"object\"}}]}}\n\n", req["id"])
+				return
+			}
+			fmt.Fprintf(w, "data: {\"jsonrpc\":\"2.0\",\"id\":%q,\"result\":{\"tools\":[{\"name\":\"query\",\"description\":\"Run SQL queries\",\"inputSchema\":{\"type\":\"object\"}}]}}\n\n", req["id"])
+		default:
+			fmt.Fprintf(w, "data: {\"jsonrpc\":\"2.0\",\"id\":%q,\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}\n\n", req["id"])
+		}
+	}}
+	manager := external.NewManager([]external.ServerConfig{
+		{Name: "context7", Transport: "http", URL: "http://docs.test/mcp", Description: "Current official library documentation", Capabilities: []string{"docs", "library-docs"}, Keywords: []string{"react", "useeffect", "official documentation"}},
+		{Name: "database", Transport: "http", URL: "http://database.test/mcp", Description: "Application database access", Capabilities: []string{"database"}, Keywords: []string{"sql"}},
+	}, externalHTTP)
+
+	var secondRequest map[string]any
+	requests := 0
+	client := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode provider request: %v", err)
+		}
+		if isNotesRequest(body) {
+			return notesResponse(), nil
+		}
+		requests++
+		if requests == 1 {
+			return sseResponse(openAIToolCallSSE("search_1", "tool_search", map[string]any{"query": "React useEffect latest documentation"})), nil
+		}
+		secondRequest = body
+		return sseResponse("data: {\"choices\":[{\"delta\":{\"content\":\"done\"}}]}\n\n" +
+			"data: [DONE]\n\n"), nil
+	})
+
+	out := runExternalProjectWithManager(t, tempDir, manager, "docs\ny\n/exit\n", provider.WithHTTPClient(client))
+	if !strings.Contains(out, "done") {
+		t.Fatalf("output = %q", out)
+	}
+	raw, _ := json.Marshal(secondRequest)
+	text := string(raw)
+	for _, want := range []string{"external_context7_resolve_library_id", "recommended\\\":true", "score\\\":", "server keyword: react"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("second request missing %q: %s", want, text)
+		}
+	}
+	if strings.Contains(text, "external_database_query") {
+		t.Fatalf("database tool leaked into docs search result: %s", text)
+	}
+	if counts["docs.test"]["initialize"] != 1 || counts["docs.test"]["tools/list"] != 1 {
+		t.Fatalf("docs counts = %#v", counts["docs.test"])
+	}
+	if counts["database.test"]["initialize"] != 0 || counts["database.test"]["tools/list"] != 0 {
+		t.Fatalf("database server was connected: %#v", counts["database.test"])
+	}
+}
+
 func TestExternalHTTPOAuthCachedTokenEndToEnd(t *testing.T) {
 	tempDir := t.TempDir()
 	home := filepath.Join(tempDir, "home")
