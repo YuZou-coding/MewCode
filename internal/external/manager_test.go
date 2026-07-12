@@ -32,6 +32,16 @@ func TestManagerCachesAndCloses(t *testing.T) {
 	}
 }
 
+func TestManagerConfiguredCountDoesNotCreateClients(t *testing.T) {
+	manager := NewManager([]ServerConfig{{Name: "docs"}, {Name: "database"}}, nil)
+	if got := manager.ConfiguredCount(); got != 2 {
+		t.Fatalf("ConfiguredCount = %d, want 2", got)
+	}
+	if got := manager.CachedCount(); got != 0 {
+		t.Fatalf("CachedCount = %d after reading configuration, want 0", got)
+	}
+}
+
 func TestManagerPrewarmReturnsBeforeDiscoveryAndRegistersTools(t *testing.T) {
 	registry, err := tool.DefaultRegistry()
 	if err != nil {

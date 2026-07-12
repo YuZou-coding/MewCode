@@ -53,7 +53,7 @@ func (m Model) statusLine() string {
 		parts = append(parts, fmt.Sprintf("iteration %d/%d", m.iteration, m.maxIterations))
 	}
 	if width >= 60 {
-		parts = append(parts, fmt.Sprintf("mcp %d", state.MCPConnected))
+		parts = append(parts, fmt.Sprintf("mcp %d/%d", state.MCPConnected, state.MCPConfigured))
 	}
 	if width >= 60 && state.SessionID != "" {
 		parts = append(parts, "session "+shortMiddle(state.SessionID, 14))

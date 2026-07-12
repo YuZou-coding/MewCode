@@ -280,6 +280,7 @@ func (c *Controller) Status() command.State {
 	}
 	if c.loop.ExternalManager != nil {
 		state.MCPConnected = c.loop.ExternalManager.CachedCount()
+		state.MCPConfigured = c.loop.ExternalManager.ConfiguredCount()
 	}
 	if c.loop.WorktreeManager != nil {
 		state.WorktreeMainRoot = c.loop.WorktreeManager.MainRoot

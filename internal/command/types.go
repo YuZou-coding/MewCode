@@ -65,6 +65,7 @@ type State struct {
 	WorkerRunning     int
 	WorkerCompleted   int
 	MCPConnected      int
+	MCPConfigured     int
 	WorktreeName      string
 	WorktreeMainRoot  string
 	WorktreePath      string

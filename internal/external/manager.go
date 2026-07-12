@@ -143,6 +143,12 @@ func (m *Manager) CachedCount() int {
 	return len(m.clients)
 }
 
+func (m *Manager) ConfiguredCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.configs)
+}
+
 func (m *Manager) ServerNames() []string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
