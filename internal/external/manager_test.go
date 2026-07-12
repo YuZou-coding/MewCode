@@ -90,6 +90,13 @@ func (c blockingCaller) Call(ctx context.Context, method string, params any) (js
 	return nil, fmt.Errorf("unexpected method: %s", method)
 }
 
+func (c blockingCaller) Notify(ctx context.Context, method string, params any) error {
+	if method == "notifications/initialized" {
+		return nil
+	}
+	return fmt.Errorf("unexpected method: %s", method)
+}
+
 func TestRemoteExecutorAdaptsTool(t *testing.T) {
 	client := NewClient("alpha", &fakeCaller{}, time.Second, nil)
 	client.initialized = true

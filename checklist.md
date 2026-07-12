@@ -1,15 +1,17 @@
-# MewCode MCP 延迟发现验收清单
+# MewCode MCP 标准兼容与 HTTP 认证验收清单
 
-- [x] 启动包含至少一个 MCP server 的项目后、首次模型请求前，`initialize=0` 且 `tools/list=0`。
-- [x] 初始模型工具列表包含 `tool_search`，不包含任何 `external_` 前缀的远端工具。
-- [x] 用关键词搜索时，结果只列出 server 名称、工具名称或描述包含该关键词的工具。
-- [x] 输入 `select:external_stdio_echo` 时只连接 `stdio` server，并注册 `external_stdio_echo`。
-- [x] 输入无法解析 server 的 `select:external_missing_echo` 时返回结构化错误，其他 server 的 `initialize` 计数保持 `0`。
-- [x] 搜索成功后的下一轮模型工具列表包含新注册的远端工具。
-- [x] 同一工具连续搜索两次只有一个注册项，server 的 `initialize=1`、`tools/list=1`。
-- [x] 一个 server 发现失败时，结果的 `errors` 包含该 server，其他 server 仍可发现和调用。
-- [x] 发现后的远端工具仍经过现有权限检查，并以工具结果回灌模型。
-- [x] TUI 状态栏的 `mcp N` 只统计成功连接的 server。
-- [x] README 与全局提示词包含 `tool_search`、按需发现和精确选择说明。
-- [x] `git diff --check` 无输出。
-- [x] `go test -count=1 ./...` 通过且失败数为 `0`。
+- [x] `initialize` 请求的 `params.protocolVersion` 为 `2025-06-18`，`params.capabilities` 为对象，`params.clientInfo.name` 为 `MewCode`，且 `params.clientInfo.version` 为非空字符串。
+- [x] server 返回受支持的协议版本后，下一条消息是无 `id` 的 `notifications/initialized`，之后才出现 `tools/list`。
+- [x] server 返回不受支持的 `protocolVersion` 时，该 server 不进入已连接状态，错误中包含返回的版本。
+- [x] stdio 与 HTTP 测试均观察到 `initialize`、`notifications/initialized`、`tools/list` 的相同顺序。
+- [x] 配置 `headers.Authorization: "Bearer ${CONTEXT7_API_KEY}"` 时，配置校验明确拒绝该复合模板；配置 `headers.CONTEXT7_API_KEY: "${CONTEXT7_API_KEY}"` 时完整展开环境变量值。
+- [x] `CONTEXT7_API_KEY` 未设置时，发现结果包含 server 名和 `CONTEXT7_API_KEY`，MewCode 仍可继续对话和使用本地工具。
+- [x] HTTP 测试 server 在 `initialize`、`tools/list` 和 `tools/call` 请求中均收到配置的 Header。
+- [x] 认证 server 返回 HTTP 401 时，错误包含 server 名和状态码 `401`，但不包含 Header 值或测试令牌 `mewcode-secret-credential`。
+- [x] 搜索测试输出、错误文本和工具结果，`grep -r "mewcode-secret-credential"` 返回 0 条非测试夹具泄漏。
+- [x] 一个 MCP server 因配置、认证或握手失败时，另一个 server 仍能完成搜索并调用工具。
+- [x] 启动含 MCP 配置的 MewCode 后，在调用 `tool_search` 前测试 server 收到的请求数为 0。
+- [x] 同一 server 连续搜索两次，只出现 1 次 `initialize`、1 次 `notifications/initialized` 和 1 次 `tools/list`。
+- [x] README 的 Context7 示例只包含一个 HTTP server，并通过 `${CONTEXT7_API_KEY}` 引用认证环境变量，不包含真实密钥或 stdio 备选项。
+- [ ] 设置有效 `CONTEXT7_API_KEY` 后启动 MewCode，按需搜索 Context7 可看到至少 1 个远端工具，并能完成 1 次工具调用。
+- [x] `go test -count=1 ./...` 通过。

@@ -41,6 +41,31 @@ func TestRegisterDiscoveredToolsNamesAndConflicts(t *testing.T) {
 	}
 }
 
+func TestRegisterRemoteToolSkipsDuplicatesAndKeepsSanitizedNameCollisions(t *testing.T) {
+	registry := tool.NewRegistry()
+	manager := &Manager{}
+	remotes := []RemoteTool{
+		{Name: "query-all", Description: "query hyphen"},
+		{Name: "query_all", Description: "query underscore"},
+	}
+	for _, remote := range remotes {
+		if err := registerRemoteTool(registry, manager, "alpha", remote); err != nil {
+			t.Fatalf("registerRemoteTool returned error: %v", err)
+		}
+	}
+	if err := registerRemoteTool(registry, manager, "alpha", remotes[0]); err != nil {
+		t.Fatalf("repeat registerRemoteTool returned error: %v", err)
+	}
+	for _, name := range []string{"external_alpha_query_all", "external_alpha_query_all_2"} {
+		if _, err := registry.Get(name); err != nil {
+			t.Fatalf("%s missing: %v", name, err)
+		}
+	}
+	if _, err := registry.Get("external_alpha_query_all_3"); err == nil {
+		t.Fatal("duplicate remote tool was registered")
+	}
+}
+
 func TestUniqueToolNameSanitizes(t *testing.T) {
 	used := map[string]bool{"external_my_server_query": true}
 	name := uniqueToolName("my-server", "query", used)

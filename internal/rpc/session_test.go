@@ -90,6 +90,34 @@ func TestSessionMatchesConcurrentResponses(t *testing.T) {
 	}
 }
 
+func TestSessionNotifySendsNotificationWithoutWaiting(t *testing.T) {
+	transport := newMemoryTransport()
+	session := NewSession(transport)
+	defer session.Close()
+
+	if err := session.Notify(context.Background(), "notifications/initialized", map[string]any{}); err != nil {
+		t.Fatalf("Notify returned error: %v", err)
+	}
+	select {
+	case raw := <-transport.out:
+		var note Notification
+		if err := json.Unmarshal(raw, &note); err != nil {
+			t.Fatalf("decode notification: %v", err)
+		}
+		if note.Method != "notifications/initialized" {
+			t.Fatalf("method = %q", note.Method)
+		}
+		if string(raw) == "" || json.Valid(raw) == false {
+			t.Fatalf("invalid notification = %q", raw)
+		}
+	default:
+		t.Fatal("notification was not sent")
+	}
+	if session.PendingCount() != 0 {
+		t.Fatalf("pending = %d", session.PendingCount())
+	}
+}
+
 func TestSessionUnknownNotificationTimeoutCancelAndError(t *testing.T) {
 	transport := newMemoryTransport()
 	session := NewSession(transport)

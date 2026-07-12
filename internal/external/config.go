@@ -21,6 +21,7 @@ type ServerConfig struct {
 	Args      []string
 	URL       string
 	Env       map[string]string
+	Headers   map[string]string
 	TimeoutMS int
 }
 
@@ -122,7 +123,7 @@ func LoadServersFile(path string) ([]ServerConfig, error) {
 
 	var servers []ServerConfig
 	var current *ServerConfig
-	var inEnv bool
+	var nestedMap string
 	scanner := bufio.NewScanner(file)
 	lineNumber := 0
 	for scanner.Scan() {
@@ -136,8 +137,8 @@ func LoadServersFile(path string) ([]ServerConfig, error) {
 			if current != nil {
 				servers = append(servers, *current)
 			}
-			current = &ServerConfig{Env: map[string]string{}}
-			inEnv = false
+			current = &ServerConfig{Env: map[string]string{}, Headers: map[string]string{}}
+			nestedMap = ""
 			trimmed = strings.TrimSpace(strings.TrimPrefix(trimmed, "- "))
 			if trimmed == "" {
 				continue
@@ -147,7 +148,11 @@ func LoadServersFile(path string) ([]ServerConfig, error) {
 			return nil, fmt.Errorf("invalid server config line %d", lineNumber)
 		}
 		if trimmed == "env:" {
-			inEnv = true
+			nestedMap = "env"
+			continue
+		}
+		if trimmed == "headers:" {
+			nestedMap = "headers"
 			continue
 		}
 		key, value, ok := strings.Cut(trimmed, ":")
@@ -156,11 +161,15 @@ func LoadServersFile(path string) ([]ServerConfig, error) {
 		}
 		key = strings.TrimSpace(key)
 		value = strings.TrimSpace(value)
-		if inEnv && strings.HasPrefix(line, "    ") {
-			current.Env[key] = cleanYAMLValue(value)
+		if nestedMap != "" && strings.HasPrefix(line, "    ") {
+			if nestedMap == "env" {
+				current.Env[key] = cleanYAMLValue(value)
+			} else {
+				current.Headers[key] = cleanYAMLValue(value)
+			}
 			continue
 		}
-		inEnv = false
+		nestedMap = ""
 		if err := assignConfigField(current, key, value); err != nil {
 			return nil, fmt.Errorf("invalid server config line %d: %w", lineNumber, err)
 		}
@@ -196,11 +205,50 @@ func ValidateServers(servers []ServerConfig) error {
 			if server.URL == "" {
 				return fmt.Errorf("http server %s url is required", server.Name)
 			}
+			for name, value := range server.Headers {
+				if strings.Contains(value, "${") && !isEnvironmentReference(value) {
+					return fmt.Errorf("http server %s header %s must use a complete ${ENV_NAME} reference", server.Name, name)
+				}
+			}
 		default:
 			return fmt.Errorf("unknown transport for server %s: %s", server.Name, server.Transport)
 		}
 	}
 	return nil
+}
+
+func ResolveHeaders(server ServerConfig, lookup func(string) (string, bool)) (map[string]string, error) {
+	resolved := make(map[string]string, len(server.Headers))
+	for name, value := range server.Headers {
+		if !isEnvironmentReference(value) {
+			resolved[name] = value
+			continue
+		}
+		envName := value[2 : len(value)-1]
+		expanded, ok := lookup(envName)
+		if !ok {
+			return nil, fmt.Errorf("external server %s requires environment variable %s", server.Name, envName)
+		}
+		resolved[name] = expanded
+	}
+	return resolved, nil
+}
+
+func isEnvironmentReference(value string) bool {
+	if len(value) < 4 || !strings.HasPrefix(value, "${") || !strings.HasSuffix(value, "}") {
+		return false
+	}
+	name := value[2 : len(value)-1]
+	if name == "" {
+		return false
+	}
+	for index, char := range name {
+		if (char >= 'A' && char <= 'Z') || (char >= 'a' && char <= 'z') || char == '_' || (index > 0 && char >= '0' && char <= '9') {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func assignConfigField(server *ServerConfig, key string, value string) error {

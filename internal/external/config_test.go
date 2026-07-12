@@ -3,6 +3,7 @@ package external
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -46,6 +47,58 @@ func TestLoadServersFile(t *testing.T) {
 	}
 	if servers[1].Transport != "http" || servers[1].URL == "" {
 		t.Fatalf("http config = %#v", servers[1])
+	}
+}
+
+func TestLoadHTTPHeadersAndResolveEnvironment(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "servers.yaml")
+	body := `servers:
+- name: context7
+  transport: http
+  url: https://mcp.context7.com/mcp
+  headers:
+    CONTEXT7_API_KEY: "${CONTEXT7_API_KEY}"
+    X-Client: MewCode
+`
+	if err := os.WriteFile(path, []byte(body), 0600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	servers, err := LoadServersFile(path)
+	if err != nil {
+		t.Fatalf("LoadServersFile returned error: %v", err)
+	}
+	if got := servers[0].Headers["CONTEXT7_API_KEY"]; got != "${CONTEXT7_API_KEY}" {
+		t.Fatalf("header reference = %q", got)
+	}
+	headers, err := ResolveHeaders(servers[0], func(name string) (string, bool) {
+		if name == "CONTEXT7_API_KEY" {
+			return "mewcode-secret-credential", true
+		}
+		return "", false
+	})
+	if err != nil {
+		t.Fatalf("ResolveHeaders returned error: %v", err)
+	}
+	if headers["CONTEXT7_API_KEY"] != "mewcode-secret-credential" || headers["X-Client"] != "MewCode" {
+		t.Fatalf("headers = %#v", headers)
+	}
+}
+
+func TestHeaderEnvironmentErrorsDoNotLeakSecrets(t *testing.T) {
+	cfg := ServerConfig{Name: "context7", Transport: "http", URL: "https://example.test", Headers: map[string]string{
+		"Authorization": "Bearer ${CONTEXT7_API_KEY}",
+	}}
+	if err := ValidateServers([]ServerConfig{cfg}); err == nil || !strings.Contains(err.Error(), "Authorization") {
+		t.Fatalf("composite template error = %v", err)
+	}
+
+	cfg.Headers["Authorization"] = "${CONTEXT7_API_KEY}"
+	_, err := ResolveHeaders(cfg, func(string) (string, bool) { return "mewcode-secret-credential", false })
+	if err == nil || !strings.Contains(err.Error(), "context7") || !strings.Contains(err.Error(), "CONTEXT7_API_KEY") {
+		t.Fatalf("missing environment error = %v", err)
+	}
+	if strings.Contains(err.Error(), "mewcode-secret-credential") {
+		t.Fatalf("secret leaked in error: %v", err)
 	}
 }
 

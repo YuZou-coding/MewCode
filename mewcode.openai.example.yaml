@@ -15,5 +15,6 @@ permission_mode: default
 # 项目规则：.mewcode/permissions.yaml
 # Hook 规则：~/.mewcode/hooks.yaml 和 .mewcode/hooks.yaml
 # 外部工具 server：.mewcode/servers.yaml
+# HTTP Header 密钥使用完整环境变量引用，例如：${CONTEXT7_API_KEY}
 # Worker 角色：~/.mewcode/workers 和 .mewcode/workers
 # Worktree 运行态目录：.mewcode/worktrees

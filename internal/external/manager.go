@@ -9,10 +9,11 @@ import (
 )
 
 type Manager struct {
-	configs    []ServerConfig
-	httpClient HTTPDoer
-	clients    map[string]*Client
-	mu         sync.Mutex
+	configs       []ServerConfig
+	httpClient    HTTPDoer
+	clientFactory func(context.Context, ServerConfig, HTTPDoer) (*Client, error)
+	clients       map[string]*Client
+	mu            sync.Mutex
 }
 
 func NewManager(configs []ServerConfig, httpClient HTTPDoer) *Manager {
@@ -36,7 +37,11 @@ func (m *Manager) Client(ctx context.Context, name string) (*Client, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("external server not configured: %s", name)
 	}
-	client, err := NewClientFromConfig(context.WithoutCancel(ctx), *cfg, m.httpClient)
+	factory := m.clientFactory
+	if factory == nil {
+		factory = NewClientFromConfig
+	}
+	client, err := factory(context.WithoutCancel(ctx), *cfg, m.httpClient)
 	if err != nil {
 		return nil, err
 	}

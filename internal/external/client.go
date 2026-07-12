@@ -3,11 +3,34 @@ package external
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"mewcode/internal/rpc"
+	"mewcode/internal/version"
 )
+
+const MCPProtocolVersion = "2025-06-18"
+
+type PeerInfo struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+}
+
+type InitializeParams struct {
+	ProtocolVersion string         `json:"protocolVersion"`
+	Capabilities    map[string]any `json:"capabilities"`
+	ClientInfo      PeerInfo       `json:"clientInfo"`
+}
+
+type InitializeResult struct {
+	ProtocolVersion string         `json:"protocolVersion"`
+	Capabilities    map[string]any `json:"capabilities"`
+	ServerInfo      PeerInfo       `json:"serverInfo"`
+}
 
 type RemoteTool struct {
 	Name        string         `json:"name"`
@@ -28,16 +51,18 @@ type ContentBlock struct {
 
 type rpcCaller interface {
 	Call(ctx context.Context, method string, params any) (json.RawMessage, error)
+	Notify(ctx context.Context, method string, params any) error
 }
 
 type Client struct {
-	Name        string
-	timeout     time.Duration
-	caller      rpcCaller
-	closeFunc   func() error
-	initialized bool
-	discovered  bool
-	tools       []RemoteTool
+	Name            string
+	timeout         time.Duration
+	caller          rpcCaller
+	closeFunc       func() error
+	initialized     bool
+	discovered      bool
+	tools           []RemoteTool
+	sensitiveValues []string
 }
 
 func NewClient(name string, caller rpcCaller, timeout time.Duration, closeFunc func() error) *Client {
@@ -54,15 +79,25 @@ func NewClientFromConfig(ctx context.Context, cfg ServerConfig, httpClient HTTPD
 	}
 	switch cfg.Transport {
 	case "stdio":
-		transport, err := NewStdioTransport(ctx, cfg)
+		transport, err := NewStdioTransport(context.WithoutCancel(ctx), cfg)
 		if err != nil {
 			return nil, err
 		}
 		session := rpc.NewSession(transport)
 		return NewClient(cfg.Name, session, timeout, session.Close), nil
 	case "http":
-		transport := NewHTTPTransport(cfg.URL, httpClient)
-		return NewClient(cfg.Name, httpCaller{transport: transport}, timeout, transport.Close), nil
+		headers, err := ResolveHeaders(cfg, os.LookupEnv)
+		if err != nil {
+			return nil, err
+		}
+		transport := NewHTTPTransport(cfg.URL, headers, httpClient)
+		client := NewClient(cfg.Name, httpCaller{transport: transport}, timeout, transport.Close)
+		for _, value := range headers {
+			if value != "" {
+				client.sensitiveValues = append(client.sensitiveValues, value)
+			}
+		}
+		return client, nil
 	default:
 		return nil, fmt.Errorf("unknown transport: %s", cfg.Transport)
 	}
@@ -74,8 +109,23 @@ func (c *Client) Initialize(ctx context.Context) error {
 	}
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
-	if _, err := c.caller.Call(ctx, "initialize", map[string]any{"client": "MewCode"}); err != nil {
-		return err
+	raw, err := c.caller.Call(ctx, "initialize", InitializeParams{
+		ProtocolVersion: MCPProtocolVersion,
+		Capabilities:    map[string]any{},
+		ClientInfo:      PeerInfo{Name: "MewCode", Version: version.Value},
+	})
+	if err != nil {
+		return c.redact(err)
+	}
+	var result InitializeResult
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return fmt.Errorf("decode initialize result: %w", err)
+	}
+	if result.ProtocolVersion != MCPProtocolVersion {
+		return fmt.Errorf("unsupported MCP protocol version: %s", result.ProtocolVersion)
+	}
+	if err := c.caller.Notify(ctx, "notifications/initialized", map[string]any{}); err != nil {
+		return c.redact(err)
 	}
 	c.initialized = true
 	return nil
@@ -92,7 +142,7 @@ func (c *Client) ListTools(ctx context.Context) ([]RemoteTool, error) {
 	defer cancel()
 	raw, err := c.caller.Call(ctx, "tools/list", map[string]any{})
 	if err != nil {
-		return nil, err
+		return nil, c.redact(err)
 	}
 	var result struct {
 		Tools []RemoteTool `json:"tools"`
@@ -116,13 +166,26 @@ func (c *Client) CallTool(ctx context.Context, name string, arguments json.RawMe
 		"arguments": json.RawMessage(arguments),
 	})
 	if err != nil {
-		return CallResult{}, err
+		return CallResult{}, c.redact(err)
 	}
 	var result CallResult
 	if err := json.Unmarshal(raw, &result); err != nil {
 		return CallResult{}, err
 	}
 	return result, nil
+}
+
+func (c *Client) redact(err error) error {
+	if err == nil {
+		return nil
+	}
+	message := err.Error()
+	for _, value := range c.sensitiveValues {
+		if value != "" {
+			message = strings.ReplaceAll(message, value, "[REDACTED]")
+		}
+	}
+	return errors.New(message)
 }
 
 func (c *Client) Close() error {
@@ -160,4 +223,16 @@ func (h httpCaller) Call(ctx context.Context, method string, params any) (json.R
 		return nil, fmt.Errorf("jsonrpc error %d: %s", resp.Error.Code, resp.Error.Message)
 	}
 	return resp.Result, nil
+}
+
+func (h httpCaller) Notify(ctx context.Context, method string, params any) error {
+	note, err := rpc.NewNotification(method, params)
+	if err != nil {
+		return err
+	}
+	raw, err := rpc.Encode(note)
+	if err != nil {
+		return err
+	}
+	return h.transport.Send(ctx, raw)
 }

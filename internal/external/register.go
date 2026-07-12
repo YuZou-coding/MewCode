@@ -11,15 +11,9 @@ import (
 
 func RegisterDiscoveredTools(ctx context.Context, registry *tool.Registry, manager *Manager) map[string]error {
 	discovered, errs := manager.Discover(ctx)
-	used := map[string]bool{}
-	for _, def := range registry.Definitions() {
-		used[def.Name] = true
-	}
 	for server, tools := range discovered {
 		for _, remote := range tools {
-			local := uniqueToolName(server, remote.Name, used)
-			used[local] = true
-			if err := registry.Register(RemoteExecutor{ServerName: server, Remote: remote, LocalName: local, Manager: manager}); err != nil {
+			if err := registerRemoteTool(registry, manager, server, remote); err != nil {
 				errs[server+"/"+remote.Name] = err
 			}
 		}
@@ -28,12 +22,29 @@ func RegisterDiscoveredTools(ctx context.Context, registry *tool.Registry, manag
 }
 
 func registerRemoteTool(registry *tool.Registry, manager *Manager, server string, remote RemoteTool) error {
+	if remoteAlreadyRegistered(registry, server, remote.Name) {
+		return nil
+	}
 	used := map[string]bool{}
 	for _, def := range registry.Definitions() {
 		used[def.Name] = true
 	}
 	local := uniqueToolName(server, remote.Name, used)
 	return registry.Register(RemoteExecutor{ServerName: server, Remote: remote, LocalName: local, Manager: manager})
+}
+
+func remoteAlreadyRegistered(registry *tool.Registry, server string, remote string) bool {
+	for _, def := range registry.Definitions() {
+		executor, err := registry.Get(def.Name)
+		if err != nil {
+			continue
+		}
+		remoteExecutor, ok := executor.(RemoteExecutor)
+		if ok && remoteExecutor.ServerName == server && remoteExecutor.Remote.Name == remote {
+			return true
+		}
+	}
+	return false
 }
 
 func uniqueToolName(server string, remote string, used map[string]bool) string {
