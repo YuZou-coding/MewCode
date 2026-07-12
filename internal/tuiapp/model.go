@@ -160,6 +160,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case permissionPromptMsg:
 		m.pendingPermission = &v
 		return m, nil
+	case tea.MouseMsg:
+		return m.updateViewport(v)
 	case tea.KeyMsg:
 		if m.pendingPermission != nil {
 			return m.handlePermissionKey(v)
@@ -274,6 +276,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	return m, nil
+}
+
+func (m Model) updateViewport(msg tea.Msg) (tea.Model, tea.Cmd) {
+	before := m.viewport.YOffset
+	viewportModel, cmd := m.viewport.Update(msg)
+	m.viewport = viewportModel
+	if m.viewport.YOffset != before {
+		if m.viewport.AtBottom() {
+			m.followOutput = true
+			m.newOutput = false
+		} else {
+			m.followOutput = false
+		}
+	}
+	return m, cmd
 }
 
 func (m *Model) submitInput() (tea.Model, tea.Cmd) {

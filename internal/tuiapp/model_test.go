@@ -628,6 +628,48 @@ func TestViewportPausesFollowingAndReportsNewOutput(t *testing.T) {
 	}
 }
 
+func TestMouseWheelScrollsTranscriptHistory(t *testing.T) {
+	registry, err := command.Builtins()
+	if err != nil {
+		t.Fatalf("Builtins: %v", err)
+	}
+	model := New(context.Background(), registry, &fakeAppController{state: command.State{Mode: "execute"}}, nil)
+	model.viewport.Height = 4
+	for i := 0; i < 20; i++ {
+		model.appendSystem(fmt.Sprintf("line %d", i))
+	}
+	bottom := model.viewport.YOffset
+	updated, _ := model.Update(tea.MouseMsg{Type: tea.MouseWheelUp, Button: tea.MouseButtonWheelUp, Action: tea.MouseActionPress})
+	model = updated.(Model)
+	if model.viewport.YOffset >= bottom {
+		t.Fatalf("mouse wheel did not scroll up: offset=%d bottom=%d", model.viewport.YOffset, bottom)
+	}
+	if model.followOutput {
+		t.Fatalf("followOutput stayed enabled after scrolling history")
+	}
+	updated, _ = model.Update(tea.MouseMsg{Type: tea.MouseWheelDown, Button: tea.MouseButtonWheelDown, Action: tea.MouseActionPress})
+	model = updated.(Model)
+	if !model.followOutput || model.newOutput || !model.viewport.AtBottom() {
+		t.Fatalf("wheel down did not resume following: follow=%v new=%v offset=%d", model.followOutput, model.newOutput, model.viewport.YOffset)
+	}
+}
+
+func TestLayoutGivesTranscriptAllAvailableRows(t *testing.T) {
+	registry, err := command.Builtins()
+	if err != nil {
+		t.Fatalf("Builtins: %v", err)
+	}
+	model := New(context.Background(), registry, &fakeAppController{state: command.State{Mode: "execute"}}, nil)
+	model.width = 80
+	model.height = 10
+	model.viewport.Width = 80
+	model.refresh()
+	view := model.View()
+	if got := strings.Count(view, "\n") + 1; got != 10 {
+		t.Fatalf("rendered lines = %d, want 10; view=%q", got, view)
+	}
+}
+
 func TestResponsiveLayoutDoesNotOverflow(t *testing.T) {
 	registry, err := command.Builtins()
 	if err != nil {
@@ -684,6 +726,25 @@ func TestCommandPanelShowsAndFiltersCommands(t *testing.T) {
 	panel := model.commandPanel()
 	if !strings.Contains(panel, "/workers") || !strings.Contains(panel, "/worktrees") || strings.Contains(panel, "/sessions") {
 		t.Fatalf("filtered command panel = %q", panel)
+	}
+}
+
+func TestPermissionsModeShortcutSubmitsArgument(t *testing.T) {
+	registry, err := command.Builtins()
+	if err != nil {
+		t.Fatalf("Builtins: %v", err)
+	}
+	controller := &fakeAppController{state: command.State{Mode: "execute"}}
+	model := New(context.Background(), registry, controller, nil)
+	updated, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/permissions yolo")})
+	model = updated.(Model)
+	updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	model = updated.(Model)
+	if got := strings.Join(controller.permissionsCommands, ","); got != "yolo" {
+		t.Fatalf("permissions commands = %q, want yolo; input=%q transcript=%q", got, model.InputValue(), model.Transcript())
+	}
+	if !strings.Contains(model.Transcript(), "permissions yolo") {
+		t.Fatalf("transcript missing permissions response: %q", model.Transcript())
 	}
 }
 
@@ -782,7 +843,8 @@ func TestPermissionPanelUsesBorderWithoutBackgroundFill(t *testing.T) {
 }
 
 type fakeAppController struct {
-	state command.State
+	state               command.State
+	permissionsCommands []string
 }
 
 func (f *fakeAppController) ShowSystemMessage(message string)                       {}
@@ -809,7 +871,10 @@ func (f *fakeAppController) ResumeSession(ctx context.Context, id string) string
 	return "resumed " + id
 }
 func (f *fakeAppController) Notes(command string, args string) string { return "notes" }
-func (f *fakeAppController) Permissions(command string) string        { return "permissions" }
+func (f *fakeAppController) Permissions(command string) string {
+	f.permissionsCommands = append(f.permissionsCommands, command)
+	return "permissions " + command
+}
 func (f *fakeAppController) Skills(ctx context.Context, args string) string {
 	return "skills"
 }

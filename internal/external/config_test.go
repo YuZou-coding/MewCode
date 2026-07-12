@@ -23,6 +23,10 @@ func TestLoadServersFile(t *testing.T) {
 	body := `servers:
 - name: local
   transport: stdio
+  description: Local tools for project-specific knowledge
+  capabilities: ["docs", "knowledge"]
+  keywords: ["react", "library documentation"]
+  examples: ["Look up React useEffect docs", "Search project knowledge"]
   command: /bin/echo
   args: ["hello", "world"]
   env:
@@ -44,6 +48,9 @@ func TestLoadServersFile(t *testing.T) {
 	}
 	if servers[0].Transport != "stdio" || servers[0].Command != "/bin/echo" || len(servers[0].Args) != 2 || servers[0].Env["MEWCODE_TEST"] != "yes" || servers[0].TimeoutMS != 1500 {
 		t.Fatalf("stdio config = %#v", servers[0])
+	}
+	if servers[0].Description != "Local tools for project-specific knowledge" || strings.Join(servers[0].Capabilities, ",") != "docs,knowledge" || strings.Join(servers[0].Keywords, ",") != "react,library documentation" || strings.Join(servers[0].Examples, ",") != "Look up React useEffect docs,Search project knowledge" {
+		t.Fatalf("metadata config = %#v", servers[0])
 	}
 	if servers[1].Transport != "http" || servers[1].URL == "" {
 		t.Fatalf("http config = %#v", servers[1])

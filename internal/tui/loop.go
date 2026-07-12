@@ -350,6 +350,16 @@ func (c *Controller) Permissions(commandName string) string {
 		return "permissions are not configured"
 	}
 	fields := strings.Fields(commandName)
+	if len(fields) == 1 {
+		if fields[0] == "reset" {
+			checker.ResetMode()
+			return "permission mode=" + string(checker.CurrentMode())
+		}
+		if mode, ok := permissions.ParseMode(strings.ToLower(fields[0])); ok {
+			checker.SetMode(mode)
+			return "permission mode=" + string(checker.CurrentMode())
+		}
+	}
 	if len(fields) == 2 && fields[0] == "mode" {
 		if fields[1] == "reset" {
 			checker.ResetMode()

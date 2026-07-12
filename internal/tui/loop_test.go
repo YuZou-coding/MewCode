@@ -603,7 +603,7 @@ func TestLoopPermissionsCommandAndClearSession(t *testing.T) {
 	fp := &fakeProvider{events: []provider.StreamEvent{{Kind: provider.EventText, Text: "ok"}}}
 	var out strings.Builder
 	err := Loop{
-		Input:             strings.NewReader("/permissions\n/permissions mode yolo\n/permissions mode strict\n/permissions mode reset\n/permissions clear-session\n/permissions\n/exit\n"),
+		Input:             strings.NewReader("/permissions\n/permissions yolo\n/permissions strict\n/permissions reset\n/permissions clear-session\n/permissions\n/exit\n"),
 		Output:            &out,
 		Errors:            io.Discard,
 		Session:           chat.NewSession(),
