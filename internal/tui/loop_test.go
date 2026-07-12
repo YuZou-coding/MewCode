@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -22,6 +24,25 @@ import (
 	"mewcode/internal/tool"
 	"mewcode/internal/worktree"
 )
+
+func TestSynchronizedWriterSerializesConcurrentWrites(t *testing.T) {
+	var buffer bytes.Buffer
+	writer := &synchronizedWriter{writer: &buffer}
+	var wait sync.WaitGroup
+	for index := 0; index < 100; index++ {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			if _, err := writer.Write([]byte("line\n")); err != nil {
+				t.Errorf("Write returned error: %v", err)
+			}
+		}()
+	}
+	wait.Wait()
+	if got := strings.Count(buffer.String(), "line\n"); got != 100 {
+		t.Fatalf("line count = %d, want 100", got)
+	}
+}
 
 type fakeProvider struct {
 	requests [][]chat.Message

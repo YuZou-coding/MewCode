@@ -34,7 +34,7 @@ func (m *Manager) Client(ctx context.Context, name string) (*Client, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("external server not configured: %s", name)
 	}
-	client, err := NewClientFromConfig(ctx, *cfg, m.httpClient)
+	client, err := NewClientFromConfig(context.WithoutCancel(ctx), *cfg, m.httpClient)
 	if err != nil {
 		return nil, err
 	}
@@ -98,4 +98,14 @@ func (m *Manager) CachedCount() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return len(m.clients)
+}
+
+func (m *Manager) ServerNames() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	names := make([]string, 0, len(m.configs))
+	for _, cfg := range m.configs {
+		names = append(names, cfg.Name)
+	}
+	return names
 }

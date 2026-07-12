@@ -358,7 +358,7 @@ rules:
 
 ## 外部工具服务器
 
-MewCode 可以从用户级 `~/.mewcode/servers.yaml` 和项目级 `.mewcode/servers.yaml` 读取外部工具服务器列表。两级配置会合并；项目级同名 server 覆盖用户级 server。启动时会连接 server，完成 `initialize` 握手，调用 `tools/list` 发现远端工具，再把远端工具注册进现有工具中心。Agent 调用远端工具时仍然走普通工具流程，包括事件输出、权限检查和 tool result 回灌。
+MewCode 可以从用户级 `~/.mewcode/servers.yaml` 和项目级 `.mewcode/servers.yaml` 读取外部工具服务器列表。两级配置会合并；项目级同名 server 覆盖用户级 server。启动时只加载配置，不连接 server，也不调用 `initialize` 或 `tools/list`。Agent 调用远端工具时仍然走普通工具流程，包括事件输出、权限检查和 tool result 回灌。
 
 stdio server 示例：
 
@@ -383,7 +383,9 @@ servers:
   timeout_ms: 30000
 ```
 
-远端工具会使用包含 server 身份的本地名称注册，例如 `external_local_tools_query`。这样不会覆盖内置 `read_file` 等本地工具；多个 server 提供同名工具时也能区分来源。同一会话内，MewCode 会缓存每个 server 的连接和工具列表，连续调用同一远端工具不会重复握手或重新发现工具。
+初始工具列表只包含内置 `tool_search`，不包含远端工具。模型可用关键词搜索 server 名称、远端工具名称或能力描述；已知完整名称时，可用 `select:external_local_tools_query` 精确加载。精确加载只连接名称对应的 server，无法解析 server 时返回错误，不会扫描全部 server。匹配工具注册后会出现在下一轮模型请求中。
+
+远端工具使用包含 server 身份的本地名称注册，例如 `external_local_tools_query`。这样不会覆盖内置 `read_file` 等本地工具；多个 server 提供同名工具时也能区分来源。同一会话内，MewCode 会缓存每个 server 的连接、工具列表和注册结果，重复搜索或连续调用不会重复握手和注册。
 
 排查外部工具问题时，优先确认 `~/.mewcode/servers.yaml` 或 `.mewcode/servers.yaml` 是否存在、server 名称是否唯一、项目级同名覆盖是否符合预期、stdio 命令是否可执行、HTTP URL 是否可访问，以及工具是否出现在模型请求的工具列表中。
 

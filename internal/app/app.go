@@ -139,11 +139,8 @@ func (a App) Run(ctx context.Context) error {
 		manager = external.NewManager(servers, nil)
 	}
 	if manager != nil {
-		errs := external.RegisterDiscoveredTools(ctx, registry, manager)
-		for name, err := range errs {
-			if a.Errors != nil {
-				_, _ = io.WriteString(a.Errors, "external server "+name+": "+err.Error()+"\n")
-			}
+		if err := registry.Register(external.NewToolSearch(manager, registry)); err != nil {
+			return err
 		}
 		defer manager.Close()
 	}

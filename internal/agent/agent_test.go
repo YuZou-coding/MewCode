@@ -154,6 +154,27 @@ func TestAgentInjectsEnvironmentAndPlanOnlyReminder(t *testing.T) {
 	}
 }
 
+func TestAgentUsesDynamicToolDefinitions(t *testing.T) {
+	registry := tool.NewRegistry()
+	if err := registry.Register(countingTool{name: "first"}); err != nil {
+		t.Fatalf("register first: %v", err)
+	}
+	agent := &Agent{
+		Registry:     registry,
+		Tools:        registry.Definitions(),
+		SkillManager: skill.NewManager("", "", skill.LoadResult{}),
+	}
+	if err := registry.Register(countingTool{name: "later"}); err != nil {
+		t.Fatalf("register later: %v", err)
+	}
+	for _, definition := range agent.toolsForTurn() {
+		if definition.Name == "later" {
+			return
+		}
+	}
+	t.Fatalf("dynamic tools = %#v", agent.toolsForTurn())
+}
+
 func TestAgentInjectsSkillSummaryThenActiveSOPAndFiltersTools(t *testing.T) {
 	registry := tool.NewRegistry()
 	manager := skill.NewManager("", "", skill.LoadResult{Skills: map[string]skill.Skill{

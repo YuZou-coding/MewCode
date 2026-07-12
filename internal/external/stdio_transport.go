@@ -15,8 +15,25 @@ type StdioTransport struct {
 	cmd    *exec.Cmd
 	stdin  io.WriteCloser
 	reader *bufio.Reader
-	stderr bytes.Buffer
+	stderr synchronizedBuffer
 	mu     sync.Mutex
+}
+
+type synchronizedBuffer struct {
+	mu     sync.RWMutex
+	buffer bytes.Buffer
+}
+
+func (b *synchronizedBuffer) Write(data []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buffer.Write(data)
+}
+
+func (b *synchronizedBuffer) String() string {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return b.buffer.String()
 }
 
 func NewStdioTransport(ctx context.Context, cfg ServerConfig) (*StdioTransport, error) {
@@ -70,8 +87,8 @@ func (t *StdioTransport) Receive(ctx context.Context) ([]byte, error) {
 	select {
 	case result := <-done:
 		if result.err != nil {
-			if t.stderr.Len() > 0 {
-				return nil, fmt.Errorf("%w: %s", result.err, t.stderr.String())
+			if stderr := t.stderr.String(); stderr != "" {
+				return nil, fmt.Errorf("%w: %s", result.err, stderr)
 			}
 			return nil, result.err
 		}

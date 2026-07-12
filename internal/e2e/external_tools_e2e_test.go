@@ -25,12 +25,12 @@ func TestExternalStdioToolEndToEnd(t *testing.T) {
 	writeExternalProjectConfig(t, tempDir, externalStdioConfig("stdio", countFile))
 	client := externalToolProvider("external_stdio_echo", map[string]any{"text": "hello stdio"}, "echo result")
 
-	out := runExternalProject(t, tempDir, "echo\n y\n/exit\n", client)
+	out := runExternalProject(t, tempDir, "echo\ny\ny\n/exit\n", client)
 	if !strings.Contains(out, "echo result") || !strings.Contains(out, "using tool external_stdio_echo") {
 		t.Fatalf("output = %q", out)
 	}
 	if got := readCountFile(t, countFile); got != "initialize=1\ntools/list=1\ntools/call=1\n" {
-		t.Fatalf("count file = %q", got)
+		t.Fatalf("count file = %q output=%q", got, out)
 	}
 }
 
@@ -59,7 +59,7 @@ func TestExternalHTTPToolEndToEnd(t *testing.T) {
 	writeModelConfig(t, tempDir)
 	manager := external.NewManager([]external.ServerConfig{{Name: "clock", Transport: "http", URL: "http://external.test/mcp"}}, clientHTTP)
 	client := externalToolProvider("external_clock_time", map[string]any{}, "time result")
-	out := runExternalProjectWithManager(t, tempDir, manager, "time\n y\n/exit\n", client)
+	out := runExternalProjectWithManager(t, tempDir, manager, "time\ny\ny\n/exit\n", client)
 	if !strings.Contains(out, "time result") || !strings.Contains(out, "using tool external_clock_time") {
 		t.Fatalf("output = %q", out)
 	}
@@ -83,20 +83,22 @@ func TestExternalConnectionReuseAndServerIsolation(t *testing.T) {
 		requests++
 		switch requests {
 		case 1:
-			return sseResponse(openAIToolCallSSE("call_1", "external_stdio_echo", map[string]any{"text": "first"})), nil
+			return sseResponse(openAIToolCallSSE("search_1", "tool_search", map[string]any{"query": "select:external_stdio_echo"})), nil
 		case 2:
+			return sseResponse(openAIToolCallSSE("call_1", "external_stdio_echo", map[string]any{"text": "first"})), nil
+		case 3:
 			return sseResponse(openAIToolCallSSE("call_2", "external_stdio_echo", map[string]any{"text": "second"})), nil
 		default:
 			return sseResponse("data: {\"choices\":[{\"delta\":{\"content\":\"done\"}}]}\n\n" +
 				"data: [DONE]\n\n"), nil
 		}
 	})
-	out := runExternalProjectAllowingStderr(t, tempDir, "reuse\n y\n y\n/exit\n", provider.WithHTTPClient(client))
+	out := runExternalProjectAllowingStderr(t, tempDir, "reuse\ny\ny\ny\n/exit\n", provider.WithHTTPClient(client))
 	if !strings.Contains(out, "done") {
 		t.Fatalf("output = %q", out)
 	}
 	if got := readCountFile(t, countFile); got != "initialize=1\ntools/list=1\ntools/call=2\n" {
-		t.Fatalf("count file = %q", got)
+		t.Fatalf("count file = %q output=%q", got, out)
 	}
 }
 
@@ -127,6 +129,9 @@ func TestExternalToolErrorFeedsBackToModel(t *testing.T) {
 		}
 		requests++
 		if requests == 1 {
+			return sseResponse(openAIToolCallSSE("search_1", "tool_search", map[string]any{"query": "select:external_bad_fail"})), nil
+		}
+		if requests == 2 {
 			return sseResponse(openAIToolCallSSE("call_1", "external_bad_fail", map[string]any{})), nil
 		}
 		secondRequest = body
@@ -137,7 +142,7 @@ func TestExternalToolErrorFeedsBackToModel(t *testing.T) {
 	tempDir := t.TempDir()
 	writeModelConfig(t, tempDir)
 	manager := external.NewManager([]external.ServerConfig{{Name: "bad", Transport: "http", URL: "http://external.test/mcp"}}, clientHTTP)
-	out := runExternalProjectWithManager(t, tempDir, manager, "fail\n y\n/exit\n", provider.WithHTTPClient(client))
+	out := runExternalProjectWithManager(t, tempDir, manager, "fail\ny\ny\n/exit\n", provider.WithHTTPClient(client))
 	if !strings.Contains(out, "error handled") {
 		t.Fatalf("output = %q", out)
 	}
@@ -178,6 +183,9 @@ func externalToolProvider(toolName string, args map[string]any, final string) pr
 	client := roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		requests++
 		if requests == 1 {
+			return sseResponse(openAIToolCallSSE("search_1", "tool_search", map[string]any{"query": "select:" + toolName})), nil
+		}
+		if requests == 2 {
 			return sseResponse(openAIToolCallSSE("call_1", toolName, args)), nil
 		}
 		return sseResponse("data: {\"choices\":[{\"delta\":{\"content\":" + strconvQuote(final) + "}}]}\n\n" +

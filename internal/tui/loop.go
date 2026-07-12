@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	"mewcode/internal/agent"
@@ -27,6 +28,17 @@ import (
 	"mewcode/internal/worker"
 	"mewcode/internal/worktree"
 )
+
+type synchronizedWriter struct {
+	mu     sync.Mutex
+	writer io.Writer
+}
+
+func (w *synchronizedWriter) Write(data []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.writer.Write(data)
+}
 
 type Loop struct {
 	Input             io.Reader
@@ -101,10 +113,12 @@ func (l Loop) Run(ctx context.Context) error {
 	if output == nil {
 		output = io.Discard
 	}
+	output = &synchronizedWriter{writer: output}
 	errorsOut := l.Errors
 	if errorsOut == nil {
 		errorsOut = io.Discard
 	}
+	errorsOut = &synchronizedWriter{writer: errorsOut}
 	session := l.Session
 	if session == nil {
 		session = chat.NewSession()
