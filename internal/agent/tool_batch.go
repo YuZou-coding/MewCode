@@ -191,9 +191,15 @@ func (a *Agent) checkPermission(ctx context.Context, call provider.ToolCall, eve
 		case permissions.HITLAllowOnce:
 			return permissions.Allow("allowed once by user")
 		case permissions.HITLAllowSession:
+			if decision.Mode == permissions.ModeStrict {
+				return permissions.Deny("permission_denied", "strict mode only allows once")
+			}
 			a.PermissionChecker.AddSessionRule(permissions.RuleForRequest(permissions.EffectAllow, permissions.SourceSession, request))
 			return permissions.Allow("allowed for this session by user")
 		case permissions.HITLAllowAlways:
+			if decision.Mode == permissions.ModeStrict {
+				return permissions.Deny("permission_denied", "strict mode only allows once")
+			}
 			rule := permissions.RuleForRequest(permissions.EffectAllow, permissions.SourceUser, request)
 			if err := permissions.AppendUserRule(rule); err != nil {
 				return permissions.Deny("permission_denied", err.Error())

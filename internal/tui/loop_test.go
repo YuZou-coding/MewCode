@@ -571,15 +571,17 @@ func TestControllerRunsIsolatedSkillWithContextStrategies(t *testing.T) {
 
 func TestLoopPermissionsCommandAndClearSession(t *testing.T) {
 	checker := &permissions.Checker{
-		Session: permissions.NewSessionStore(),
-		Project: []permissions.Rule{{Effect: permissions.EffectDeny, Tool: "edit_file"}},
-		User:    []permissions.Rule{{Effect: permissions.EffectAllow, Tool: "read_file"}},
+		Mode:        permissions.ModeDefault,
+		DefaultMode: permissions.ModeDefault,
+		Session:     permissions.NewSessionStore(),
+		Project:     []permissions.Rule{{Effect: permissions.EffectDeny, Tool: "edit_file"}},
+		User:        []permissions.Rule{{Effect: permissions.EffectAllow, Tool: "read_file"}},
 	}
 	checker.Session.Add(permissions.Rule{Effect: permissions.EffectAllow, Tool: "run_command"})
 	fp := &fakeProvider{events: []provider.StreamEvent{{Kind: provider.EventText, Text: "ok"}}}
 	var out strings.Builder
 	err := Loop{
-		Input:             strings.NewReader("/permissions\n/permissions clear-session\n/permissions\n/exit\n"),
+		Input:             strings.NewReader("/permissions\n/permissions mode yolo\n/permissions mode strict\n/permissions mode reset\n/permissions clear-session\n/permissions\n/exit\n"),
 		Output:            &out,
 		Errors:            io.Discard,
 		Session:           chat.NewSession(),
@@ -591,12 +593,61 @@ func TestLoopPermissionsCommandAndClearSession(t *testing.T) {
 		t.Fatalf("Run returned error: %v", err)
 	}
 	text := out.String()
-	if !strings.Contains(text, "permissions user=1 project=1 session=1") || !strings.Contains(text, "cleared session permissions") || !strings.Contains(text, "permissions user=1 project=1 session=0") {
+	if !strings.Contains(text, "permissions mode=default default_mode=default user=1 project=1 session=1") || !strings.Contains(text, "permission mode=yolo") || !strings.Contains(text, "permission mode=strict") || !strings.Contains(text, "cleared session permissions") || !strings.Contains(text, "permissions mode=default default_mode=default user=1 project=1 session=0") {
 		t.Fatalf("permissions output = %q", text)
 	}
 	if len(checker.Session.Rules()) != 0 {
 		t.Fatalf("session rules not cleared")
 	}
+}
+
+func TestLoopStrictPermissionPromptOnlyOffersOnce(t *testing.T) {
+	registry := tool.NewRegistry()
+	called := false
+	if err := registry.Register(permissionCountingTool{name: "edit_file", called: &called}); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	fp := &fakeProvider{series: [][]provider.StreamEvent{{{Kind: provider.EventToolCall, ToolCall: &provider.ToolCall{ID: "call_1", Name: "edit_file", Arguments: []byte(`{}`)}}}, {{Kind: provider.EventText, Text: "done"}}}}
+	var out strings.Builder
+	err := Loop{
+		Input:       strings.NewReader("edit\ny\n/exit\n"),
+		Output:      &out,
+		Errors:      io.Discard,
+		Session:     chat.NewSession(),
+		Provider:    fp,
+		Registry:    registry,
+		Tools:       registry.Definitions(),
+		NoTypeDelay: true,
+		PermissionChecker: &permissions.Checker{
+			Root:        t.TempDir(),
+			Mode:        permissions.ModeStrict,
+			DefaultMode: permissions.ModeStrict,
+			Session:     permissions.NewSessionStore(),
+		},
+	}.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if !called {
+		t.Fatal("edit tool was not executed after once approval")
+	}
+	if text := out.String(); !strings.Contains(text, "[n] deny [y] allow once") || strings.Contains(text, "allow session") || strings.Contains(text, "allow always") {
+		t.Fatalf("strict prompt = %q", text)
+	}
+}
+
+type permissionCountingTool struct {
+	name   string
+	called *bool
+}
+
+func (t permissionCountingTool) Definition() tool.Definition {
+	return tool.Definition{Name: t.name, Schema: tool.ObjectSchema(nil, nil)}
+}
+
+func (t permissionCountingTool) Execute(ctx context.Context, input tool.Input) tool.Result {
+	*t.called = true
+	return tool.OK(nil)
 }
 
 func assertDiskContent(t *testing.T, path string, want string) {

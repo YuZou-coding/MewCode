@@ -230,3 +230,29 @@ func TestParseMaxIterationsDefaultsAndOverride(t *testing.T) {
 		t.Fatalf("override max iterations = %d", cfg.MaxIterations)
 	}
 }
+
+func TestParsePermissionModeDefaultsAndValidates(t *testing.T) {
+	base := "protocol: openai\nmodel: test\nbase_url: http://example.test\napi_key: key\n"
+	cfg, err := Parse(strings.NewReader(base))
+	if err != nil {
+		t.Fatalf("Parse default: %v", err)
+	}
+	if cfg.PermissionMode != "default" {
+		t.Fatalf("default permission mode = %q", cfg.PermissionMode)
+	}
+
+	for _, mode := range []string{"strict", "default", "yolo"} {
+		cfg, err := Parse(strings.NewReader(base + "permission_mode: " + mode + "\n"))
+		if err != nil {
+			t.Fatalf("Parse %s: %v", mode, err)
+		}
+		if cfg.PermissionMode != mode {
+			t.Fatalf("permission mode = %q, want %q", cfg.PermissionMode, mode)
+		}
+	}
+
+	_, err = Parse(strings.NewReader(base + "permission_mode: unsafe\n"))
+	if err == nil || err.Error() != "invalid permission_mode: unsafe" {
+		t.Fatalf("invalid mode error = %v", err)
+	}
+}

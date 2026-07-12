@@ -28,7 +28,16 @@ func MatchRule(rule Rule, request Request) bool {
 }
 
 func DecideByRules(request Request, session []Rule, project []Rule, user []Rule) Decision {
-	for _, group := range [][]Rule{session, project, user} {
+	groups := [][]Rule{session, project, user}
+	for _, group := range groups {
+		for index := range group {
+			rule := group[index]
+			if rule.Effect == EffectDeny && MatchRule(rule, request) {
+				return Decision{Effect: rule.Effect, Reason: "matched rule", Rule: &rule}
+			}
+		}
+	}
+	for _, group := range groups {
 		for index := range group {
 			rule := group[index]
 			if MatchRule(rule, request) {

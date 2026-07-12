@@ -11,6 +11,7 @@ worktree_ttl: 7d
 team_default_backend: in_process
 team_scheduler_enabled: false
 team_default_member_approval: true
+permission_mode: default
 
 # 权限规则不写在这个 LLM 配置文件中。
 # 用户规则：~/.mewcode/permissions.yaml

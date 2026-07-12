@@ -436,6 +436,33 @@ func TestModelPermissionPromptWaitsForUserChoice(t *testing.T) {
 	}
 }
 
+func TestModelStrictPermissionOnlyAcceptsOnceOrDeny(t *testing.T) {
+	registry, err := command.Builtins()
+	if err != nil {
+		t.Fatalf("Builtins: %v", err)
+	}
+	model := New(context.Background(), registry, &fakeAppController{state: command.State{Mode: "execute"}}, nil)
+	responses := make(chan permissions.HITLChoice, 1)
+	model.pendingPermission = &permissionPromptMsg{
+		request:  permissions.Request{Tool: "edit_file", Arguments: []byte(`{"path":"README.md"}`)},
+		decision: permissions.Decision{Effect: permissions.EffectAsk, Mode: permissions.ModeStrict},
+		respond:  responses,
+	}
+	if panel := model.permissionLine(); !strings.Contains(panel, "y once") || strings.Contains(panel, "s session") || strings.Contains(panel, "a always") {
+		t.Fatalf("strict panel = %q", panel)
+	}
+	updated, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	model = updated.(Model)
+	if model.pendingPermission == nil {
+		t.Fatal("session approval unexpectedly completed strict request")
+	}
+	updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
+	model = updated.(Model)
+	if got := <-responses; got != permissions.HITLAllowOnce {
+		t.Fatalf("choice = %s", got)
+	}
+}
+
 func TestStructuredTranscriptRendersBlocks(t *testing.T) {
 	registry, err := command.Builtins()
 	if err != nil {

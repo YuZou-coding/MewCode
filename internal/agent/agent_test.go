@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -550,6 +551,27 @@ func TestPermissionCheckerReplacesCommandConfirmation(t *testing.T) {
 	result := agent.executeSingleTool(context.Background(), provider.ToolCall{ID: "call_1", Name: "run_command", Arguments: raw}, make(chan Event, EventBufferSize))
 	if !result.OK {
 		t.Fatalf("result = %#v", result)
+	}
+}
+
+func TestStrictPermissionRejectsPersistentApproval(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	checker := &permissions.Checker{Root: t.TempDir(), Mode: permissions.ModeStrict, DefaultMode: permissions.ModeStrict, Session: permissions.NewSessionStore()}
+	agent := &Agent{
+		PermissionChecker: checker,
+		PermissionPrompt: func(ctx context.Context, request permissions.Request, decision permissions.Decision) permissions.HITLChoice {
+			return permissions.HITLAllowAlways
+		},
+	}
+	decision := agent.checkPermission(context.Background(), *call("call_1", "edit_file"), make(chan Event, EventBufferSize))
+	if decision.Effect != permissions.EffectDeny || decision.Reason != "strict mode only allows once" {
+		t.Fatalf("decision = %#v", decision)
+	}
+	if len(checker.Session.Rules()) != 0 {
+		t.Fatalf("strict mode persisted session rules: %#v", checker.Session.Rules())
+	}
+	if _, err := os.Stat(permissions.UserRulesFile()); !os.IsNotExist(err) {
+		t.Fatalf("strict mode persisted user rules: %v", err)
 	}
 }
 

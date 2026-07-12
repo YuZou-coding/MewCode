@@ -103,7 +103,7 @@ func TestAnthropicRequestIncludesTools(t *testing.T) {
 	if requestBody["tools"] == nil {
 		t.Fatalf("request missing tools: %#v", requestBody)
 	}
-	if !strings.Contains(fmt.Sprint(requestBody["system"]), "优先使用专用工具") {
+	if !strings.Contains(fmt.Sprint(requestBody["system"]), "有专用工具时绝不要使用 run_command") {
 		t.Fatalf("request missing tool system instruction: %#v", requestBody)
 	}
 }
@@ -139,7 +139,7 @@ func TestAnthropicRequestSeparatesStableSystemAndDynamicMessages(t *testing.T) {
 		t.Fatalf("stream returned error: %v", err)
 	}
 
-	if !strings.Contains(fmt.Sprint(requestBody["system"]), "优先使用专用工具") {
+	if !strings.Contains(fmt.Sprint(requestBody["system"]), "有专用工具时绝不要使用 run_command") {
 		t.Fatalf("system missing stable instruction: %#v", requestBody["system"])
 	}
 	messages := requestBody["messages"].([]any)

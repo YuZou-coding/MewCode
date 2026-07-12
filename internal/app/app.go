@@ -158,10 +158,12 @@ func (a App) Run(ctx context.Context) error {
 			return err
 		}
 		checker = &permissions.Checker{
-			Root:    cwd,
-			Session: permissions.NewSessionStore(),
-			Project: projectRules,
-			User:    userRules,
+			Root:        cwd,
+			Mode:        permissions.Mode(a.Config.PermissionMode),
+			DefaultMode: permissions.Mode(a.Config.PermissionMode),
+			Session:     permissions.NewSessionStore(),
+			Project:     projectRules,
+			User:        userRules,
 		}
 	}
 	compactManager := a.Compact
@@ -559,10 +561,12 @@ func cloneChecker(checker *permissions.Checker) *permissions.Checker {
 		return nil
 	}
 	return &permissions.Checker{
-		Root:    checker.Root,
-		Session: permissions.NewSessionStore(),
-		Project: append([]permissions.Rule(nil), checker.Project...),
-		User:    append([]permissions.Rule(nil), checker.User...),
+		Root:        checker.Root,
+		Mode:        checker.CurrentMode(),
+		DefaultMode: checker.DefaultMode,
+		Session:     permissions.NewSessionStore(),
+		Project:     append([]permissions.Rule(nil), checker.Project...),
+		User:        append([]permissions.Rule(nil), checker.User...),
 	}
 }
 

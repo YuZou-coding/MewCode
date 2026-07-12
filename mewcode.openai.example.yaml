@@ -8,6 +8,7 @@ max_iterations: 30
 worktree_copy_files: settings.local.json,.env.local
 worktree_link_dirs: node_modules,.venv
 worktree_ttl: 7d
+permission_mode: default
 
 # 权限规则不写在这个 LLM 配置文件中。
 # 用户规则：~/.mewcode/permissions.yaml

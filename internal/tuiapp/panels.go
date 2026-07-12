@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"mewcode/internal/permissions"
 )
 
 func (m *Model) syncCommandPanel() {
@@ -57,7 +59,9 @@ func (m Model) permissionLine() string {
 	if pending.decision.Reason != "" {
 		lines = append(lines, "reason: "+truncateDisplay(pending.decision.Reason, max(8, m.width-9)))
 	}
-	if m.width < 52 {
+	if pending.decision.Mode == permissions.ModeStrict {
+		lines = append(lines, "n deny   y once")
+	} else if m.width < 52 {
 		lines = append(lines, "n deny · y once", "s session · a always")
 	} else {
 		lines = append(lines, "n deny   y once   s session   a always")

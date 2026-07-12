@@ -18,7 +18,7 @@ func Builtins() (*Registry, error) {
 		{Name: "sessions", Aliases: []string{"ls"}, Description: "列出历史会话", Usage: "/sessions", Type: TypeLocal, Handler: sessionsHandler},
 		{Name: "resume", Aliases: []string{"r"}, Description: "恢复指定会话", Usage: "/resume <id>", Type: TypeUIState, ArgHint: "id", Handler: resumeHandler},
 		{Name: "notes", Aliases: []string{"memory", "mem"}, Description: "查看和管理笔记", Usage: "/notes [path|clear user|clear project|clear all]", Type: TypeLocal, ArgHint: "path|clear", Subcommands: []string{"path", "clear"}, Handler: notesHandler},
-		{Name: "permissions", Aliases: []string{"perms"}, Description: "查看权限摘要", Usage: "/permissions [clear-session]", Type: TypeLocal, Subcommands: []string{"clear-session"}, Handler: permissionsHandler},
+		{Name: "permissions", Aliases: []string{"perms"}, Description: "查看和切换权限模式", Usage: "/permissions [clear-session|mode strict|mode default|mode yolo|mode reset]", Type: TypeLocal, ArgHint: "clear-session|mode", Subcommands: []string{"clear-session", "mode"}, Handler: permissionsHandler},
 		{Name: "skills", Description: "查看和管理 Skill", Usage: "/skills [show <name>|run <name> [args]|reload]", Type: TypeLocal, ArgHint: "show|run|reload", Subcommands: []string{"show", "run", "reload"}, Handler: skillsHandler},
 		{Name: "workers", Description: "查看和管理后台 worker", Usage: "/workers [show <id>|cancel <id>]", Type: TypeLocal, ArgHint: "show|cancel", Subcommands: []string{"show", "cancel"}, Handler: workersHandler},
 		{Name: "worktrees", Description: "查看和管理隔离工作目录", Usage: "/worktrees [create|list|enter|exit|status|delete]", Type: TypeUIState, ArgHint: "create|list|enter|exit|status|delete", Subcommands: []string{"create", "list", "enter", "exit", "status", "delete"}, Handler: worktreesHandler},

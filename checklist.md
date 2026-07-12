@@ -1,12 +1,14 @@
-# MewCode 版本命令验收清单
+# MewCode 三档权限模式验收清单
 
-- [x] `go test ./internal/version ./internal/command` 通过。
-- [x] `go test -count=1 ./...` 通过。
-- [x] 未注入版本的构建执行 `/version` 后输出严格等于 `MewCode dev`。
-- [x] 使用 `-ldflags "-X mewcode/internal/version.Value=v1.2.3"` 构建后，执行 `/version` 输出严格等于 `MewCode v1.2.3`。
-- [x] `/help` 输出包含 `/version`、用途说明和用法。
-- [x] 输入 `/ver` 时补全结果为 `/version`。
-- [x] `/v` 不会解析为已注册命令，未知命令提示保持现有行为。
-- [x] 版本命令不显示 Git commit、构建时间、Go 版本、操作系统或 CPU 架构。
-- [x] `README.md` 同时包含 `/version` 用法和构建时版本注入示例。
-- [x] 端到端启动 MewCode，输入 `/version` 能看到当前版本，且请求不会发送给模型。
+- [ ] 不配置 `permission_mode` 时，解析结果为 `default`。
+- [ ] `permission_mode: strict`、`default`、`yolo` 均可解析；`unsafe` 返回 `invalid permission_mode: unsafe`。
+- [ ] `strict` 下带 allow 规则的常规工具调用仍触发确认。
+- [ ] `default` 下命中 allow 规则的工具调用不触发确认。
+- [ ] `yolo` 下未命中规则的常规工具调用不触发确认。
+- [ ] 任意模式下，命中 deny 规则的工具调用返回拒绝。
+- [ ] 任意模式下，`rm -rf /` 返回 `dangerous_command`，项目外路径返回 `path_outside_sandbox`。
+- [ ] `/permissions` 显示当前模式、启动默认模式和三类规则数量。
+- [ ] `/permissions mode yolo`、`strict`、`default` 可在当前会话切换；`/permissions mode reset` 恢复配置模式。
+- [ ] 严格模式的行式和全屏权限提示只显示 `n deny` 与 `y once`，输入 `s` 不创建会话规则。
+- [ ] 后续启动的 worker 继承当前权限模式，但不共享主会话的临时规则。
+- [ ] `go test -count=1 ./...` 通过。

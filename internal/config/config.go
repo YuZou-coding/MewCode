@@ -25,6 +25,7 @@ type Config struct {
 	TeamDefaultBackend        string
 	TeamSchedulerEnabled      bool
 	TeamDefaultMemberApproval bool
+	PermissionMode            string
 	MaxIterations             int
 }
 
@@ -109,6 +110,7 @@ func Parse(r io.Reader) (Config, error) {
 		TeamDefaultBackend:        values["team_default_backend"],
 		TeamSchedulerEnabled:      parseBool(values["team_scheduler_enabled"]),
 		TeamDefaultMemberApproval: parseBool(values["team_default_member_approval"]),
+		PermissionMode:            permissionMode(values["permission_mode"]),
 		MaxIterations:             parsePositiveInt(values["max_iterations"], 30),
 	}
 	if err := cfg.Validate(); err != nil {
@@ -161,7 +163,18 @@ func (c Config) Validate() error {
 			return fmt.Errorf("missing required config field: %s", field.name)
 		}
 	}
+	if c.PermissionMode != "strict" && c.PermissionMode != "default" && c.PermissionMode != "yolo" {
+		return fmt.Errorf("invalid permission_mode: %s", c.PermissionMode)
+	}
 	return nil
+}
+
+func permissionMode(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return "default"
+	}
+	return value
 }
 
 func cleanValue(raw string) string {

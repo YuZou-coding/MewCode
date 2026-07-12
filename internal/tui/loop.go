@@ -329,7 +329,19 @@ func (c *Controller) Permissions(commandName string) string {
 	if checker == nil {
 		return "permissions are not configured"
 	}
-	if strings.TrimSpace(commandName) == "clear-session" {
+	fields := strings.Fields(commandName)
+	if len(fields) == 2 && fields[0] == "mode" {
+		if fields[1] == "reset" {
+			checker.ResetMode()
+			return "permission mode=" + string(checker.CurrentMode())
+		}
+		mode, ok := permissions.ParseMode(strings.ToLower(fields[1]))
+		if !ok || !checker.SetMode(mode) {
+			return "permissions error: mode must be strict, default, yolo, or reset"
+		}
+		return "permission mode=" + string(checker.CurrentMode())
+	}
+	if len(fields) == 1 && fields[0] == "clear-session" {
 		if checker.Session != nil {
 			checker.Session.Clear()
 		}
@@ -339,7 +351,7 @@ func (c *Controller) Permissions(commandName string) string {
 	if checker.Session != nil {
 		sessionRules = len(checker.Session.Rules())
 	}
-	return fmt.Sprintf("permissions user=%d project=%d session=%d", len(checker.User), len(checker.Project), sessionRules)
+	return fmt.Sprintf("permissions mode=%s default_mode=%s user=%d project=%d session=%d", checker.CurrentMode(), checker.InitialMode(), len(checker.User), len(checker.Project), sessionRules)
 }
 
 func (c *Controller) Skills(ctx context.Context, args string) string {
@@ -937,7 +949,11 @@ func emptyNote(content string) string {
 
 func permissionPrompt(scan func() bool, text func() string, output io.Writer) agent.PermissionPromptFunc {
 	return func(ctx context.Context, request permissions.Request, decision permissions.Decision) permissions.HITLChoice {
-		if _, err := fmt.Fprintf(output, "\nAllow %s? [n] deny [y] allow once [s] allow session [a] allow always: ", request.Tool); err != nil {
+		prompt := "\nAllow %s? [n] deny [y] allow once [s] allow session [a] allow always: "
+		if decision.Mode == permissions.ModeStrict {
+			prompt = "\nAllow %s? [n] deny [y] allow once: "
+		}
+		if _, err := fmt.Fprintf(output, prompt, request.Tool); err != nil {
 			return permissions.HITLDeny
 		}
 		if !scan() {
@@ -947,8 +963,14 @@ func permissionPrompt(scan func() bool, text func() string, output io.Writer) ag
 		case "y", "yes":
 			return permissions.HITLAllowOnce
 		case "s", "session":
+			if decision.Mode == permissions.ModeStrict {
+				return permissions.HITLDeny
+			}
 			return permissions.HITLAllowSession
 		case "a", "always":
+			if decision.Mode == permissions.ModeStrict {
+				return permissions.HITLDeny
+			}
 			return permissions.HITLAllowAlways
 		default:
 			return permissions.HITLDeny

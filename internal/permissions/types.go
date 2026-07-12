@@ -13,6 +13,23 @@ const (
 	EffectAsk   Effect = "ask"
 )
 
+type Mode string
+
+const (
+	ModeDefault Mode = "default"
+	ModeStrict  Mode = "strict"
+	ModeYOLO    Mode = "yolo"
+)
+
+func ParseMode(value string) (Mode, bool) {
+	switch Mode(value) {
+	case ModeDefault, ModeStrict, ModeYOLO:
+		return Mode(value), true
+	default:
+		return "", false
+	}
+}
+
 type Source string
 
 const (
@@ -41,6 +58,7 @@ type Decision struct {
 	Code   string
 	Reason string
 	Rule   *Rule
+	Mode   Mode
 }
 
 type HITLChoice string

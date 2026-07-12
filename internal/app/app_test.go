@@ -53,6 +53,24 @@ func TestAppRunConnectsLoop(t *testing.T) {
 	}
 }
 
+func TestCloneCheckerInheritsModeWithoutSessionRules(t *testing.T) {
+	checker := &permissions.Checker{
+		Root:        t.TempDir(),
+		Mode:        permissions.ModeYOLO,
+		DefaultMode: permissions.ModeDefault,
+		Session:     permissions.NewSessionStore(),
+		Project:     []permissions.Rule{{Effect: permissions.EffectDeny, Tool: "edit_file"}},
+	}
+	checker.Session.Add(permissions.Rule{Effect: permissions.EffectAllow, Tool: "read_file"})
+	clone := cloneChecker(checker)
+	if clone.CurrentMode() != permissions.ModeYOLO || clone.InitialMode() != permissions.ModeDefault {
+		t.Fatalf("clone modes = current:%s default:%s", clone.CurrentMode(), clone.InitialMode())
+	}
+	if len(clone.Session.Rules()) != 0 || len(clone.Project) != 1 {
+		t.Fatalf("clone rules = session:%#v project:%#v", clone.Session.Rules(), clone.Project)
+	}
+}
+
 type scriptedAppProvider struct {
 	requests [][]chat.Message
 	series   [][]provider.StreamEvent

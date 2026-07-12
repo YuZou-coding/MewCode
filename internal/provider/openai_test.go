@@ -101,7 +101,7 @@ func TestOpenAIRequestIncludesTools(t *testing.T) {
 		t.Fatalf("request missing messages: %#v", requestBody)
 	}
 	systemMessage, ok := messages[0].(map[string]any)
-	if !ok || systemMessage["role"] != "system" || !strings.Contains(fmt.Sprint(systemMessage["content"]), "优先使用专用工具") {
+	if !ok || systemMessage["role"] != "system" || !strings.Contains(fmt.Sprint(systemMessage["content"]), "有专用工具时绝不要使用 run_command") {
 		t.Fatalf("request missing tool system instruction: %#v", messages)
 	}
 }
@@ -141,7 +141,7 @@ func TestOpenAIRequestSeparatesStableSystemAndDynamicMessages(t *testing.T) {
 	first := messages[0].(map[string]any)
 	second := messages[1].(map[string]any)
 	third := messages[2].(map[string]any)
-	if first["role"] != "system" || !strings.Contains(fmt.Sprint(first["content"]), "优先使用专用工具") {
+	if first["role"] != "system" || !strings.Contains(fmt.Sprint(first["content"]), "有专用工具时绝不要使用 run_command") {
 		t.Fatalf("first message is not stable system: %#v", first)
 	}
 	if second["role"] != "system" || !strings.Contains(fmt.Sprint(second["content"]), "cwd: /tmp/project") {

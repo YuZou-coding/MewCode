@@ -72,8 +72,8 @@ func TestRuleMatchingAndPriority(t *testing.T) {
 		[]Rule{{Effect: EffectAsk, Tool: "read_file", Source: SourceProject}},
 		[]Rule{{Effect: EffectDeny, Tool: "read_file", Source: SourceUser}},
 	)
-	if decision.Effect != EffectAllow {
-		t.Fatalf("session should win: %#v", decision)
+	if decision.Effect != EffectDeny {
+		t.Fatalf("deny should win: %#v", decision)
 	}
 	decision = DecideByRules(request, nil,
 		[]Rule{{Effect: EffectDeny, Tool: "read_file", Source: SourceProject}},
@@ -86,8 +86,8 @@ func TestRuleMatchingAndPriority(t *testing.T) {
 		[]Rule{{Effect: EffectAsk, Tool: "read_file", Source: SourceProject}},
 		[]Rule{{Effect: EffectDeny, Tool: "read_file", Source: SourceUser}},
 	)
-	if decision.Effect != EffectAsk {
-		t.Fatalf("project ask should win: %#v", decision)
+	if decision.Effect != EffectDeny {
+		t.Fatalf("deny should win: %#v", decision)
 	}
 	decision = DecideByRules(request, []Rule{{Effect: EffectDeny, Tool: "*"}, {Effect: EffectAllow, Tool: "read_file"}}, nil, nil)
 	if decision.Effect != EffectDeny {
@@ -177,8 +177,8 @@ func TestCheckerHardBoundariesAndRules(t *testing.T) {
 	}
 	checker.AddSessionRule(Rule{Effect: EffectAllow, Tool: "read_file"})
 	decision := checker.Check(Request{Tool: "read_file", Arguments: args(map[string]any{"path": "README.md"})})
-	if decision.Effect != EffectAllow {
-		t.Fatalf("session allow should win: %#v", decision)
+	if decision.Effect != EffectDeny {
+		t.Fatalf("deny should win: %#v", decision)
 	}
 	decision = checker.Check(Request{Tool: "run_command", Arguments: args(map[string]any{"command": "rm -rf /"})})
 	if decision.Effect != EffectDeny || decision.Code != "dangerous_command" {
@@ -187,6 +187,30 @@ func TestCheckerHardBoundariesAndRules(t *testing.T) {
 	decision = checker.Check(Request{Tool: "read_file", Arguments: args(map[string]any{"path": "../outside.txt"})})
 	if decision.Effect != EffectDeny || decision.Code != "path_outside_sandbox" {
 		t.Fatalf("outside path should deny: %#v", decision)
+	}
+}
+
+func TestCheckerPermissionModes(t *testing.T) {
+	root := t.TempDir()
+	request := Request{Tool: "edit_file", Root: root, Arguments: args(map[string]any{"path": "README.md"})}
+
+	for _, testCase := range []struct {
+		name string
+		mode Mode
+		user []Rule
+		want Effect
+	}{
+		{name: "default follows allow", mode: ModeDefault, user: []Rule{{Effect: EffectAllow, Tool: "edit_file"}}, want: EffectAllow},
+		{name: "strict ignores allow", mode: ModeStrict, user: []Rule{{Effect: EffectAllow, Tool: "edit_file"}}, want: EffectAsk},
+		{name: "yolo allows unmatched", mode: ModeYOLO, want: EffectAllow},
+		{name: "deny wins in yolo", mode: ModeYOLO, user: []Rule{{Effect: EffectDeny, Tool: "edit_file"}}, want: EffectDeny},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			checker := Checker{Root: root, Mode: testCase.mode, Session: NewSessionStore(), User: testCase.user}
+			if got := checker.Check(request).Effect; got != testCase.want {
+				t.Fatalf("Check() = %s, want %s", got, testCase.want)
+			}
+		})
 	}
 }
 

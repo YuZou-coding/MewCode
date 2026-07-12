@@ -434,8 +434,16 @@ func (m Model) handlePermissionKey(v tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "y":
 			choice = permissions.HITLAllowOnce
 		case "s":
+			if m.pendingPermission != nil && m.pendingPermission.decision.Mode == permissions.ModeStrict {
+				answered = false
+				break
+			}
 			choice = permissions.HITLAllowSession
 		case "a":
+			if m.pendingPermission != nil && m.pendingPermission.decision.Mode == permissions.ModeStrict {
+				answered = false
+				break
+			}
 			choice = permissions.HITLAllowAlways
 		case "n":
 			choice = permissions.HITLDeny

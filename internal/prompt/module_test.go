@@ -27,7 +27,7 @@ func TestDefaultModulesContainExpectedResponsibilities(t *testing.T) {
 			t.Fatalf("default modules missing %s", want)
 		}
 	}
-	for _, want := range []string{"优先使用专用工具", "不要优先使用 run_command", "编辑前先读取相关文件"} {
+	for _, want := range []string{"有专用工具时绝不要使用 run_command", "读文件用 read_file", "编辑文件用 edit_file", "任务有 3 步以上时", "不要使用 emoji", "file_path:line_number"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("global instruction missing %q: %s", want, got)
 		}

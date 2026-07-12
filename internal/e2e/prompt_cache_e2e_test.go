@@ -35,7 +35,7 @@ func TestOpenAIPromptRequestContainsStableEnvironmentAndUser(t *testing.T) {
 	stable := messages[0].(map[string]any)
 	env := messages[1].(map[string]any)
 	user := findMessage(messages, "user", "hello")
-	if stable["role"] != "system" || !strings.Contains(fmt.Sprint(stable["content"]), "优先使用专用工具") {
+	if stable["role"] != "system" || !strings.Contains(fmt.Sprint(stable["content"]), "有专用工具时绝不要使用 run_command") {
 		t.Fatalf("missing stable system: %#v", stable)
 	}
 	if env["role"] != "system" || !strings.Contains(fmt.Sprint(env["content"]), "cwd") {
@@ -102,7 +102,7 @@ func TestAnthropicPromptRequestContainsStableEnvironmentAndUser(t *testing.T) {
 	})
 
 	_ = runInTempProject(t, configBody("anthropic", "claude-test", "http://provider.test"), "hello\n/exit\n", provider.WithHTTPClient(client))
-	if !strings.Contains(fmt.Sprint(body["system"]), "优先使用专用工具") {
+	if !strings.Contains(fmt.Sprint(body["system"]), "有专用工具时绝不要使用 run_command") {
 		t.Fatalf("missing stable system: %#v", body["system"])
 	}
 	messages := body["messages"].([]any)
