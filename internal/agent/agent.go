@@ -267,10 +267,14 @@ func (a *Agent) fireHook(ctx context.Context, hookCtx hooks.Context) {
 
 func (a *Agent) toolsForTurn() []tool.Definition {
 	defs := a.Tools
-	if a.SkillManager == nil {
-		defs = a.Tools
-	} else {
+	if a.Registry != nil {
+		defs = a.Registry.Definitions()
+	}
+	if a.SkillManager != nil {
 		defs = a.SkillManager.FilterDefinitions(a.Tools)
+		if a.Registry != nil {
+			defs = a.SkillManager.FilterDefinitions(a.Registry.Definitions())
+		}
 	}
 	if a.TeamManager == nil {
 		filtered := make([]tool.Definition, 0, len(defs))

@@ -358,7 +358,7 @@ rules:
 
 ## 外部工具服务器
 
-MewCode 可以从用户级 `~/.mewcode/servers.yaml` 和项目级 `.mewcode/servers.yaml` 读取外部工具服务器列表。两级配置会合并；项目级同名 server 覆盖用户级 server。启动时会连接 server，完成 `initialize` 握手，调用 `tools/list` 发现远端工具，再把远端工具注册进现有工具中心。Agent 调用远端工具时仍然走普通工具流程，包括事件输出、权限检查和 tool result 回灌。
+MewCode 可以从用户级 `~/.mewcode/servers.yaml` 和项目级 `.mewcode/servers.yaml` 读取外部工具服务器列表。两级配置会合并；项目级同名 server 覆盖用户级 server。启动时只加载配置，不创建进程或网络连接。Agent 需要远端能力时调用内置 `discover_mcp_tools`，MewCode 才按 MCP `2025-06-18` 标准完成初始化、发送 `notifications/initialized`、调用 `tools/list` 并注册远端工具。远端工具仍然走普通工具流程，包括事件输出、权限检查和 tool result 回灌。
 
 stdio server 示例：
 
@@ -373,19 +373,23 @@ servers:
   timeout_ms: 30000
 ```
 
-Streamable HTTP server 示例：
+Context7 Streamable HTTP 示例（只从环境变量读取密钥）：
 
 ```yaml
 servers:
-- name: remote_tools
+- name: context7
   transport: http
-  url: https://example.com/mcp
+  url: https://mcp.context7.com/mcp
+  headers:
+    CONTEXT7_API_KEY: "${CONTEXT7_API_KEY}"
   timeout_ms: 30000
 ```
 
-远端工具会使用包含 server 身份的本地名称注册，例如 `external_local_tools_query`。这样不会覆盖内置 `read_file` 等本地工具；多个 server 提供同名工具时也能区分来源。同一会话内，MewCode 会缓存每个 server 的连接和工具列表，连续调用同一远端工具不会重复握手或重新发现工具。
+Header 可使用普通字面值，或使用完整的 `${ENV_NAME}` 环境变量引用。为避免认证数据意外进入配置和错误输出，不支持 `Bearer ${TOKEN}` 这类复合模板；需要前缀时应把完整 Header 值放入环境变量。变量缺失只会让对应 server 发现失败，不会阻断 MewCode 或其他 server。
 
-排查外部工具问题时，优先确认 `~/.mewcode/servers.yaml` 或 `.mewcode/servers.yaml` 是否存在、server 名称是否唯一、项目级同名覆盖是否符合预期、stdio 命令是否可执行、HTTP URL 是否可访问，以及工具是否出现在模型请求的工具列表中。
+远端工具会使用包含 server 身份的本地名称注册，例如 `external_local_tools_query`。这样不会覆盖内置 `read_file` 等本地工具；多个 server 提供同名工具时也能区分来源。同一会话内，MewCode 会缓存每个 server 的连接和工具列表，连续发现或调用同一远端工具不会重复握手或重新发现工具。
+
+排查外部工具问题时，优先确认 `~/.mewcode/servers.yaml` 或 `.mewcode/servers.yaml` 是否存在、server 名称是否唯一、项目级同名覆盖是否符合预期、Header 引用的环境变量是否已设置、stdio 命令是否可执行、HTTP URL 是否可访问，以及调用 `discover_mcp_tools` 后工具是否出现在下一轮模型请求中。认证错误只显示 server、环境变量名或 HTTP 状态码，不回显 Header 和令牌值。
 
 ## 上下文压缩
 

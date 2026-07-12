@@ -134,6 +134,33 @@ func TestReactLoopRunsUntilNoToolCalls(t *testing.T) {
 	}
 }
 
+func TestAgentRefreshesRegistryDefinitionsEachTurn(t *testing.T) {
+	registry := tool.NewRegistry()
+	if err := registry.Register(registerTool{registry: registry}); err != nil {
+		t.Fatal(err)
+	}
+	fp := &fakeProvider{series: [][]provider.StreamEvent{
+		{{Kind: provider.EventToolCall, ToolCall: call("call_1", "register_tool")}},
+		{{Kind: provider.EventText, Text: "done"}},
+	}}
+	a := &Agent{Provider: fp, Registry: registry, Session: chat.NewSession(), Tools: registry.Definitions()}
+	drain(a.Run(context.Background(), "discover"))
+	if len(fp.tools) != 2 || !strings.Contains(toolNames(fp.tools[1]), "new_remote_tool") {
+		t.Fatalf("tools by turn = %#v", fp.tools)
+	}
+}
+
+type registerTool struct{ registry *tool.Registry }
+
+func (r registerTool) Definition() tool.Definition {
+	return tool.Definition{Name: "register_tool", Schema: tool.ObjectSchema(nil, map[string]any{})}
+}
+
+func (r registerTool) Execute(context.Context, tool.Input) tool.Result {
+	_ = r.registry.Register(countingTool{name: "new_remote_tool", called: new(bool)})
+	return tool.OK(nil)
+}
+
 func TestAgentInjectsEnvironmentAndPlanOnlyReminder(t *testing.T) {
 	fp := &fakeProvider{series: [][]provider.StreamEvent{{{Kind: provider.EventText, Text: "计划"}}}}
 	agent := &Agent{Provider: fp, Session: chat.NewSession(), PlanOnly: true}

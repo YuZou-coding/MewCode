@@ -23,14 +23,14 @@ func TestExternalStdioToolEndToEnd(t *testing.T) {
 	tempDir := t.TempDir()
 	countFile := filepath.Join(tempDir, "stdio-count.txt")
 	writeExternalProjectConfig(t, tempDir, externalStdioConfig("stdio", countFile))
-	client := externalToolProvider("external_stdio_echo", map[string]any{"text": "hello stdio"}, "echo result")
+	client := externalToolProvider(t, "external_stdio_echo", map[string]any{"text": "hello stdio"}, "echo result")
 
-	out := runExternalProject(t, tempDir, "echo\n y\n/exit\n", client)
+	out := runExternalProject(t, tempDir, "echo\ny\ny\n/exit\n", client)
 	if !strings.Contains(out, "echo result") || !strings.Contains(out, "using tool external_stdio_echo") {
 		t.Fatalf("output = %q", out)
 	}
-	if got := readCountFile(t, countFile); got != "initialize=1\ntools/list=1\ntools/call=1\n" {
-		t.Fatalf("count file = %q", got)
+	if got := readCountFile(t, countFile); got != "initialize=1\nnotifications/initialized=1\ntools/list=1\ntools/call=1\n" {
+		t.Fatalf("count file = %q output=%q", got, out)
 	}
 }
 
@@ -47,7 +47,8 @@ func TestExternalHTTPToolEndToEnd(t *testing.T) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		switch method {
 		case "initialize":
-			fmt.Fprintf(w, "data: {\"jsonrpc\":\"2.0\",\"id\":%q,\"result\":{\"ok\":true}}\n\n", req["id"])
+			fmt.Fprintf(w, "data: {\"jsonrpc\":\"2.0\",\"id\":%q,\"result\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"serverInfo\":{\"name\":\"clock\",\"version\":\"1\"}}}\n\n", req["id"])
+		case "notifications/initialized":
 		case "tools/list":
 			fmt.Fprintf(w, "data: {\"jsonrpc\":\"2.0\",\"id\":%q,\"result\":{\"tools\":[{\"name\":\"time\",\"description\":\"Time tool\",\"inputSchema\":{\"type\":\"object\"}}]}}\n\n", req["id"])
 		case "tools/call":
@@ -58,12 +59,12 @@ func TestExternalHTTPToolEndToEnd(t *testing.T) {
 	tempDir := t.TempDir()
 	writeModelConfig(t, tempDir)
 	manager := external.NewManager([]external.ServerConfig{{Name: "clock", Transport: "http", URL: "http://external.test/mcp"}}, clientHTTP)
-	client := externalToolProvider("external_clock_time", map[string]any{}, "time result")
-	out := runExternalProjectWithManager(t, tempDir, manager, "time\n y\n/exit\n", client)
+	client := externalToolProvider(t, "external_clock_time", map[string]any{}, "time result")
+	out := runExternalProjectWithManager(t, tempDir, manager, "time\ny\ny\n/exit\n", client)
 	if !strings.Contains(out, "time result") || !strings.Contains(out, "using tool external_clock_time") {
 		t.Fatalf("output = %q", out)
 	}
-	if clientHTTP.counts["initialize"] != 1 || clientHTTP.counts["tools/list"] != 1 || clientHTTP.counts["tools/call"] != 1 {
+	if clientHTTP.counts["initialize"] != 1 || clientHTTP.counts["notifications/initialized"] != 1 || clientHTTP.counts["tools/list"] != 1 || clientHTTP.counts["tools/call"] != 1 {
 		t.Fatalf("counts = %#v", clientHTTP.counts)
 	}
 }
@@ -83,20 +84,22 @@ func TestExternalConnectionReuseAndServerIsolation(t *testing.T) {
 		requests++
 		switch requests {
 		case 1:
-			return sseResponse(openAIToolCallSSE("call_1", "external_stdio_echo", map[string]any{"text": "first"})), nil
+			return sseResponse(openAIToolCallSSE("discover_1", external.DiscoverToolName, map[string]any{})), nil
 		case 2:
+			return sseResponse(openAIToolCallSSE("call_1", "external_stdio_echo", map[string]any{"text": "first"})), nil
+		case 3:
 			return sseResponse(openAIToolCallSSE("call_2", "external_stdio_echo", map[string]any{"text": "second"})), nil
 		default:
 			return sseResponse("data: {\"choices\":[{\"delta\":{\"content\":\"done\"}}]}\n\n" +
 				"data: [DONE]\n\n"), nil
 		}
 	})
-	out := runExternalProjectAllowingStderr(t, tempDir, "reuse\n y\n y\n/exit\n", provider.WithHTTPClient(client))
+	out := runExternalProjectAllowingStderr(t, tempDir, "reuse\ny\ny\ny\n/exit\n", provider.WithHTTPClient(client))
 	if !strings.Contains(out, "done") {
 		t.Fatalf("output = %q", out)
 	}
-	if got := readCountFile(t, countFile); got != "initialize=1\ntools/list=1\ntools/call=2\n" {
-		t.Fatalf("count file = %q", got)
+	if got := readCountFile(t, countFile); got != "initialize=1\nnotifications/initialized=1\ntools/list=1\ntools/call=2\n" {
+		t.Fatalf("count file = %q output=%q", got, out)
 	}
 }
 
@@ -107,7 +110,8 @@ func TestExternalToolErrorFeedsBackToModel(t *testing.T) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		switch req["method"] {
 		case "initialize":
-			fmt.Fprintf(w, "data: {\"jsonrpc\":\"2.0\",\"id\":%q,\"result\":{}}\n\n", req["id"])
+			fmt.Fprintf(w, "data: {\"jsonrpc\":\"2.0\",\"id\":%q,\"result\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"serverInfo\":{\"name\":\"bad\",\"version\":\"1\"}}}\n\n", req["id"])
+		case "notifications/initialized":
 		case "tools/list":
 			fmt.Fprintf(w, "data: {\"jsonrpc\":\"2.0\",\"id\":%q,\"result\":{\"tools\":[{\"name\":\"fail\",\"description\":\"Fail\",\"inputSchema\":{\"type\":\"object\"}}]}}\n\n", req["id"])
 		case "tools/call":
@@ -127,6 +131,9 @@ func TestExternalToolErrorFeedsBackToModel(t *testing.T) {
 		}
 		requests++
 		if requests == 1 {
+			return sseResponse(openAIToolCallSSE("discover_1", external.DiscoverToolName, map[string]any{"server": "bad"})), nil
+		}
+		if requests == 2 {
 			return sseResponse(openAIToolCallSSE("call_1", "external_bad_fail", map[string]any{})), nil
 		}
 		secondRequest = body
@@ -137,7 +144,7 @@ func TestExternalToolErrorFeedsBackToModel(t *testing.T) {
 	tempDir := t.TempDir()
 	writeModelConfig(t, tempDir)
 	manager := external.NewManager([]external.ServerConfig{{Name: "bad", Transport: "http", URL: "http://external.test/mcp"}}, clientHTTP)
-	out := runExternalProjectWithManager(t, tempDir, manager, "fail\n y\n/exit\n", provider.WithHTTPClient(client))
+	out := runExternalProjectWithManager(t, tempDir, manager, "fail\ny\ny\n/exit\n", provider.WithHTTPClient(client))
 	if !strings.Contains(out, "error handled") {
 		t.Fatalf("output = %q", out)
 	}
@@ -163,7 +170,8 @@ func TestExternalToolsStdioHelper(t *testing.T) {
 		_ = writeExternalCounts(countFile, counts)
 		switch method {
 		case "initialize":
-			fmt.Printf("{\"jsonrpc\":\"2.0\",\"id\":%q,\"result\":{\"ok\":true}}\n", id)
+			fmt.Printf("{\"jsonrpc\":\"2.0\",\"id\":%q,\"result\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"serverInfo\":{\"name\":\"stdio\",\"version\":\"1\"}}}\n", id)
+		case "notifications/initialized":
 		case "tools/list":
 			fmt.Printf("{\"jsonrpc\":\"2.0\",\"id\":%q,\"result\":{\"tools\":[{\"name\":\"echo\",\"description\":\"Echo tool\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\"}}}}]}}\n", id)
 		case "tools/call":
@@ -173,11 +181,19 @@ func TestExternalToolsStdioHelper(t *testing.T) {
 	os.Exit(0)
 }
 
-func externalToolProvider(toolName string, args map[string]any, final string) provider.Option {
+func externalToolProvider(t *testing.T, toolName string, args map[string]any, final string) provider.Option {
+	t.Helper()
 	requests := 0
 	client := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		var request map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatalf("decode provider request: %v", err)
+		}
 		requests++
 		if requests == 1 {
+			return sseResponse(openAIToolCallSSE("discover_1", external.DiscoverToolName, map[string]any{})), nil
+		}
+		if requests == 2 {
 			return sseResponse(openAIToolCallSSE("call_1", toolName, args)), nil
 		}
 		return sseResponse("data: {\"choices\":[{\"delta\":{\"content\":" + strconvQuote(final) + "}}]}\n\n" +
@@ -301,7 +317,7 @@ func readCountFile(t *testing.T, path string) string {
 }
 
 func writeExternalCounts(path string, counts map[string]int) error {
-	return os.WriteFile(path, []byte(fmt.Sprintf("initialize=%d\ntools/list=%d\ntools/call=%d\n", counts["initialize"], counts["tools/list"], counts["tools/call"])), 0600)
+	return os.WriteFile(path, []byte(fmt.Sprintf("initialize=%d\nnotifications/initialized=%d\ntools/list=%d\ntools/call=%d\n", counts["initialize"], counts["notifications/initialized"], counts["tools/list"], counts["tools/call"])), 0600)
 }
 
 var _ io.Reader

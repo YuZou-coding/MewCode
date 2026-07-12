@@ -92,6 +92,27 @@ func (s *Session) Call(ctx context.Context, method string, params any) (json.Raw
 	}
 }
 
+func (s *Session) Notify(ctx context.Context, method string, params any) error {
+	note, err := NewNotification(method, params)
+	if err != nil {
+		return err
+	}
+	raw, err := Encode(note)
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	err = s.err
+	s.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return s.transport.Send(ctx, raw)
+}
+
 func (s *Session) Close() error {
 	s.closeWithError(fmt.Errorf("jsonrpc session closed"))
 	return s.transport.Close()

@@ -15,33 +15,24 @@ type HTTPDoer interface {
 }
 
 type HTTPTransport struct {
-	url    string
-	client HTTPDoer
+	url     string
+	headers map[string]string
+	client  HTTPDoer
 }
 
-func NewHTTPTransport(url string, client HTTPDoer) *HTTPTransport {
+func NewHTTPTransport(url string, headers map[string]string, client HTTPDoer) *HTTPTransport {
 	if client == nil {
 		client = http.DefaultClient
 	}
-	return &HTTPTransport{url: url, client: client}
+	return &HTTPTransport{url: url, headers: headers, client: client}
 }
 
 func (t *HTTPTransport) SendAndReceive(ctx context.Context, data []byte) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, t.url, bytes.NewReader(bytes.TrimSpace(data)))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "text/event-stream, application/json")
-	resp, err := t.client.Do(req)
+	resp, err := t.send(ctx, data)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("http status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
-	}
 	contentType := resp.Header.Get("content-type")
 	if strings.Contains(contentType, "text/event-stream") {
 		return readSSEMessage(resp.Body)
@@ -51,6 +42,35 @@ func (t *HTTPTransport) SendAndReceive(ctx context.Context, data []byte) ([]byte
 		return nil, err
 	}
 	return bytes.TrimSpace(body), nil
+}
+
+func (t *HTTPTransport) Send(ctx context.Context, data []byte) error {
+	resp, err := t.send(ctx, data)
+	if err != nil {
+		return err
+	}
+	return resp.Body.Close()
+}
+
+func (t *HTTPTransport) send(ctx context.Context, data []byte) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, t.url, bytes.NewReader(bytes.TrimSpace(data)))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "text/event-stream, application/json")
+	for name, value := range t.headers {
+		req.Header.Set(name, value)
+	}
+	resp, err := t.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		_ = resp.Body.Close()
+		return nil, fmt.Errorf("http status %d", resp.StatusCode)
+	}
+	return resp, nil
 }
 
 func (t *HTTPTransport) Close() error {
