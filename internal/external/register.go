@@ -27,6 +27,15 @@ func RegisterDiscoveredTools(ctx context.Context, registry *tool.Registry, manag
 	return errs
 }
 
+func registerRemoteTool(registry *tool.Registry, manager *Manager, server string, remote RemoteTool) error {
+	used := map[string]bool{}
+	for _, def := range registry.Definitions() {
+		used[def.Name] = true
+	}
+	local := uniqueToolName(server, remote.Name, used)
+	return registry.Register(RemoteExecutor{ServerName: server, Remote: remote, LocalName: local, Manager: manager})
+}
+
 func uniqueToolName(server string, remote string, used map[string]bool) string {
 	base := sanitizeToolName("external_" + server + "_" + remote)
 	if base == "" {

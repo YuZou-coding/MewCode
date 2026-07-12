@@ -652,6 +652,19 @@ func TestResponsiveLayoutDoesNotOverflow(t *testing.T) {
 	}
 }
 
+func TestStatusLineShowsConnectedMCPCount(t *testing.T) {
+	registry, err := command.Builtins()
+	if err != nil {
+		t.Fatalf("Builtins: %v", err)
+	}
+	controller := &fakeAppController{state: command.State{Mode: "execute", MessageCount: 1, MCPConnected: 2}}
+	model := New(context.Background(), registry, controller, nil)
+	model.width = 80
+	if line := model.statusLine(); !strings.Contains(line, "mcp 2") {
+		t.Fatalf("status line missing MCP count: %q", line)
+	}
+}
+
 func TestCommandPanelShowsAndFiltersCommands(t *testing.T) {
 	registry, err := command.Builtins()
 	if err != nil {

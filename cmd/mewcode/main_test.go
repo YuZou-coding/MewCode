@@ -86,3 +86,27 @@ func TestSetupGlobalDryRunAndCopyDefaultFiles(t *testing.T) {
 		t.Fatalf("global instruction raw=%q err=%v", raw, err)
 	}
 }
+
+func TestSetupGlobalCopiesMCPConfig(t *testing.T) {
+	home := t.TempDir()
+	source := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.WriteFile(filepath.Join(source, "mewcode.yaml"), []byte("protocol: openai\nmodel: test\nbase_url: http://provider.test\napi_key: key\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(source, ".mewcode", "mcp_servers.yaml")
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("servers:\n- name: test\n  transport: stdio\n  command: /bin/echo\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	code := runCLI(context.Background(), []string{"mewcode", "setup-global", "--from", source, "--include", "servers"}, strings.NewReader(""), &out, &out)
+	if code != 0 {
+		t.Fatalf("code = %d output=%s", code, out.String())
+	}
+	if _, err := os.Stat(filepath.Join(home, ".mewcode", "mcp_servers.yaml")); err != nil {
+		t.Fatalf("global MCP config missing: %v", err)
+	}
+}

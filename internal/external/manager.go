@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"sync"
+
+	"mewcode/internal/tool"
 )
 
 type Manager struct {
@@ -75,6 +77,42 @@ func (m *Manager) Discover(ctx context.Context) (map[string][]RemoteTool, map[st
 		discovered[cfg.Name] = tools
 	}
 	return discovered, errs
+}
+
+func (m *Manager) Prewarm(ctx context.Context, registry *tool.Registry, report func(string, error)) <-chan struct{} {
+	done := make(chan struct{})
+	go func() {
+		var wait sync.WaitGroup
+		for _, cfg := range m.configs {
+			server := cfg.Name
+			wait.Add(1)
+			go func() {
+				defer wait.Done()
+				client, err := m.Client(ctx, server)
+				if err != nil {
+					if report != nil {
+						report(server, err)
+					}
+					return
+				}
+				tools, err := client.ListTools(ctx)
+				if err != nil {
+					if report != nil {
+						report(server, err)
+					}
+					return
+				}
+				for _, remote := range tools {
+					if err := registerRemoteTool(registry, m, server, remote); err != nil && report != nil {
+						report(server+"/"+remote.Name, err)
+					}
+				}
+			}()
+		}
+		wait.Wait()
+		close(done)
+	}()
+	return done
 }
 
 func (m *Manager) Close() error {

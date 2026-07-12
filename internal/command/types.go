@@ -64,6 +64,7 @@ type State struct {
 	HookWarnings      int
 	WorkerRunning     int
 	WorkerCompleted   int
+	MCPConnected      int
 	WorktreeName      string
 	WorktreeMainRoot  string
 	WorktreePath      string

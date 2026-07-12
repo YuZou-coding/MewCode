@@ -132,9 +132,14 @@ func (a App) Run(ctx context.Context) error {
 	}
 	manager := a.ExternalManager
 	if manager == nil {
-		servers, err := external.LoadMergedServers(cwd, home)
+		servers, warnings, err := external.LoadMergedMCPServers(cwd, home)
 		if err != nil {
 			return err
+		}
+		for _, warning := range warnings {
+			if a.Errors != nil {
+				_, _ = io.WriteString(a.Errors, warning+"\n")
+			}
 		}
 		manager = external.NewManager(servers, nil)
 	}
@@ -265,6 +270,7 @@ func (a App) Run(ctx context.Context) error {
 		SkillManager:      skillManager,
 		HookEngine:        hookEngine,
 		WorkerManager:     workerManager,
+		ExternalManager:   manager,
 		TeamManager:       teamManager,
 		WorktreeManager:   worktreeManager,
 		WorktreeCleaned:   cleanup.Removed,

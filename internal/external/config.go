@@ -9,7 +9,10 @@ import (
 	"strings"
 )
 
-const ServersPath = ".mewcode/servers.yaml"
+const (
+	MCPServersPath    = ".mewcode/mcp_servers.yaml"
+	LegacyServersPath = ".mewcode/servers.yaml"
+)
 
 type ServerConfig struct {
 	Name      string
@@ -22,29 +25,42 @@ type ServerConfig struct {
 }
 
 func ServersFile(root string) string {
+	return MCPServersFile(root)
+}
+
+func MCPServersFile(root string) string {
 	if root == "" {
 		root = "."
 	}
-	return filepath.Join(root, ServersPath)
+	return filepath.Join(root, MCPServersPath)
 }
 
 func UserServersFile(home string) string {
+	return UserMCPServersFile(home)
+}
+
+func UserMCPServersFile(home string) string {
 	if home == "" {
 		if detected, err := os.UserHomeDir(); err == nil {
 			home = detected
 		}
 	}
-	return filepath.Join(home, ServersPath)
+	return filepath.Join(home, MCPServersPath)
 }
 
 func LoadMergedServers(projectRoot string, homeDir string) ([]ServerConfig, error) {
-	user, err := LoadServersFile(UserServersFile(homeDir))
+	servers, _, err := LoadMergedMCPServers(projectRoot, homeDir)
+	return servers, err
+}
+
+func LoadMergedMCPServers(projectRoot string, homeDir string) ([]ServerConfig, []string, error) {
+	user, userWarning, err := loadMCPServersFile(homeDir, true)
 	if err != nil {
-		return nil, fmt.Errorf("user servers: %w", err)
+		return nil, nil, fmt.Errorf("user MCP servers: %w", err)
 	}
-	project, err := LoadServersFile(ServersFile(projectRoot))
+	project, projectWarning, err := loadMCPServersFile(projectRoot, false)
 	if err != nil {
-		return nil, fmt.Errorf("project servers: %w", err)
+		return nil, nil, fmt.Errorf("project MCP servers: %w", err)
 	}
 	merged := make([]ServerConfig, 0, len(user)+len(project))
 	indexByName := map[string]int{}
@@ -60,7 +76,38 @@ func LoadMergedServers(projectRoot string, homeDir string) ([]ServerConfig, erro
 		indexByName[server.Name] = len(merged)
 		merged = append(merged, server)
 	}
-	return merged, nil
+	var warnings []string
+	if userWarning != "" {
+		warnings = append(warnings, userWarning)
+	}
+	if projectWarning != "" {
+		warnings = append(warnings, projectWarning)
+	}
+	return merged, warnings, nil
+}
+
+func loadMCPServersFile(root string, user bool) ([]ServerConfig, string, error) {
+	path := MCPServersFile(root)
+	if user {
+		path = UserMCPServersFile(root)
+	}
+	servers, err := LoadServersFile(path)
+	if err != nil || servers != nil {
+		return servers, "", err
+	}
+	legacyPath := filepath.Join(root, LegacyServersPath)
+	if user && root == "" {
+		home, homeErr := os.UserHomeDir()
+		if homeErr != nil {
+			return nil, "", homeErr
+		}
+		legacyPath = filepath.Join(home, LegacyServersPath)
+	}
+	servers, err = LoadServersFile(legacyPath)
+	if err != nil || servers == nil {
+		return servers, "", err
+	}
+	return servers, fmt.Sprintf("MCP config %s is deprecated; rename it to %s", legacyPath, path), nil
 }
 
 func LoadServersFile(path string) ([]ServerConfig, error) {

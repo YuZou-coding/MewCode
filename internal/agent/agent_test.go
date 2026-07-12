@@ -112,6 +112,20 @@ func TestRunReturnsBufferedEventChannelQuickly(t *testing.T) {
 	drain(events)
 }
 
+func TestToolsForTurnReadsRegistryUpdates(t *testing.T) {
+	registry, err := tool.DefaultRegistry()
+	if err != nil {
+		t.Fatalf("DefaultRegistry returned error: %v", err)
+	}
+	agent := &Agent{Registry: registry, Tools: registry.Definitions()}
+	if err := registry.Register(countingTool{name: "external_ready_echo", called: new(bool)}); err != nil {
+		t.Fatalf("Register returned error: %v", err)
+	}
+	if !strings.Contains(toolNames(agent.toolsForTurn()), "external_ready_echo") {
+		t.Fatalf("tools = %s", toolNames(agent.toolsForTurn()))
+	}
+}
+
 func TestReactLoopRunsUntilNoToolCalls(t *testing.T) {
 	registry := tool.NewRegistry()
 	_ = registry.Register(sleepTool{name: "read_file", duration: 1 * time.Millisecond})

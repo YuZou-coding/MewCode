@@ -1,10 +1,14 @@
 package tool
 
-import "fmt"
+import (
+	"fmt"
+	"sync"
+)
 
 type Registry struct {
 	tools map[string]Executor
 	order []string
+	mu    sync.RWMutex
 }
 
 func NewRegistry() *Registry {
@@ -29,6 +33,8 @@ func DefaultRegistry() (*Registry, error) {
 }
 
 func (r *Registry) Register(tool Executor) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	def := tool.Definition()
 	if def.Name == "" {
 		return fmt.Errorf("tool name is required")
@@ -42,6 +48,8 @@ func (r *Registry) Register(tool Executor) error {
 }
 
 func (r *Registry) Get(name string) (Executor, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	tool, ok := r.tools[name]
 	if !ok {
 		return nil, fmt.Errorf("tool not found: %s", name)
@@ -50,6 +58,8 @@ func (r *Registry) Get(name string) (Executor, error) {
 }
 
 func (r *Registry) Definitions() []Definition {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	defs := make([]Definition, 0, len(r.order))
 	for _, name := range r.order {
 		defs = append(defs, r.tools[name].Definition())
@@ -58,6 +68,8 @@ func (r *Registry) Definitions() []Definition {
 }
 
 func (r *Registry) CloneFiltered(defs []Definition) *Registry {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	allowed := map[string]bool{}
 	for _, def := range defs {
 		allowed[def.Name] = true

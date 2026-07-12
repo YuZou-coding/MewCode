@@ -84,7 +84,7 @@ worktree_ttl: 7d
 | `notes.md` | 用户级保存用户偏好/纠正反馈；项目级保存项目知识/参考资料 | 不建议互相复制，除非你明确想迁移个人偏好或项目知识 |
 | `skills/` | 项目级覆盖用户级，用户级覆盖内置 | 通用 Skill 放全局；项目专属 SOP 放项目级 |
 | `workers/` | 项目级覆盖用户级，用户级覆盖内置 | 通用 worker 放全局；项目专属角色放项目级 |
-| `servers.yaml` | 用户级和项目级合并，项目级同名 server 覆盖用户级 | 通用 MCP/外部工具放全局；项目专属 server 放项目级 |
+| `mcp_servers.yaml` | 用户级和项目级合并，项目级同名 server 覆盖用户级 | 通用 MCP/外部工具放全局；项目专属 server 放项目级 |
 
 也可以用一键部署命令复制当前项目配置到全局：
 
@@ -358,7 +358,7 @@ rules:
 
 ## 外部工具服务器
 
-MewCode 可以从用户级 `~/.mewcode/servers.yaml` 和项目级 `.mewcode/servers.yaml` 读取外部工具服务器列表。两级配置会合并；项目级同名 server 覆盖用户级 server。启动时只加载配置，不连接 server，也不调用 `initialize` 或 `tools/list`。Agent 调用远端工具时仍然走普通工具流程，包括事件输出、权限检查和 tool result 回灌。
+MewCode 可以从用户级 `~/.mewcode/mcp_servers.yaml` 和项目级 `.mewcode/mcp_servers.yaml` 读取外部工具服务器列表。两级配置会合并；项目级同名 server 覆盖用户级 server。旧的 `servers.yaml` 仍可兼容读取，但会输出迁移警告。启动时只加载配置，不连接 server，也不调用 `initialize` 或 `tools/list`。Agent 调用远端工具时仍然走普通工具流程，包括事件输出、权限检查和 tool result 回灌。
 
 stdio server 示例：
 
@@ -387,7 +387,7 @@ servers:
 
 远端工具使用包含 server 身份的本地名称注册，例如 `external_local_tools_query`。这样不会覆盖内置 `read_file` 等本地工具；多个 server 提供同名工具时也能区分来源。同一会话内，MewCode 会缓存每个 server 的连接、工具列表和注册结果，重复搜索或连续调用不会重复握手和注册。
 
-排查外部工具问题时，优先确认 `~/.mewcode/servers.yaml` 或 `.mewcode/servers.yaml` 是否存在、server 名称是否唯一、项目级同名覆盖是否符合预期、stdio 命令是否可执行、HTTP URL 是否可访问，以及工具是否出现在模型请求的工具列表中。
+排查外部工具问题时，优先确认 `~/.mewcode/mcp_servers.yaml` 或 `.mewcode/mcp_servers.yaml` 是否存在、server 名称是否唯一、项目级同名覆盖是否符合预期、stdio 命令是否可执行、HTTP URL 是否可访问，以及工具是否出现在模型请求的工具列表中。
 
 ## 上下文压缩
 

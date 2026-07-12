@@ -16,6 +16,7 @@ import (
 	"mewcode/internal/chat"
 	"mewcode/internal/command"
 	"mewcode/internal/compact"
+	"mewcode/internal/external"
 	"mewcode/internal/hooks"
 	"mewcode/internal/instructions"
 	"mewcode/internal/memory"
@@ -63,6 +64,7 @@ type Loop struct {
 	SkillManager      *skill.Manager
 	HookEngine        *hooks.Engine
 	WorkerManager     *worker.Manager
+	ExternalManager   *external.Manager
 	TeamManager       *team.Manager
 	WorktreeManager   *worktree.Manager
 	WorktreeCleaned   int
@@ -274,6 +276,9 @@ func (c *Controller) Status() command.State {
 	if c.loop.WorkerManager != nil {
 		state.WorkerRunning = c.loop.WorkerManager.RunningCount()
 		state.WorkerCompleted = c.loop.WorkerManager.RecentCompletedCount()
+	}
+	if c.loop.ExternalManager != nil {
+		state.MCPConnected = c.loop.ExternalManager.CachedCount()
 	}
 	if c.loop.WorktreeManager != nil {
 		state.WorktreeMainRoot = c.loop.WorktreeManager.MainRoot

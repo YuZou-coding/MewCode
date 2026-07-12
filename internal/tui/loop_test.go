@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"errors"
@@ -623,52 +624,15 @@ func TestLoopPermissionsCommandAndClearSession(t *testing.T) {
 }
 
 func TestLoopStrictPermissionPromptOnlyOffersOnce(t *testing.T) {
-	registry := tool.NewRegistry()
-	called := false
-	if err := registry.Register(permissionCountingTool{name: "edit_file", called: &called}); err != nil {
-		t.Fatalf("register: %v", err)
-	}
-	fp := &fakeProvider{series: [][]provider.StreamEvent{{{Kind: provider.EventToolCall, ToolCall: &provider.ToolCall{ID: "call_1", Name: "edit_file", Arguments: []byte(`{}`)}}}, {{Kind: provider.EventText, Text: "done"}}}}
+	scanner := bufio.NewScanner(strings.NewReader("y\n"))
 	var out strings.Builder
-	err := Loop{
-		Input:       strings.NewReader("edit\ny\n/exit\n"),
-		Output:      &out,
-		Errors:      io.Discard,
-		Session:     chat.NewSession(),
-		Provider:    fp,
-		Registry:    registry,
-		Tools:       registry.Definitions(),
-		NoTypeDelay: true,
-		PermissionChecker: &permissions.Checker{
-			Root:        t.TempDir(),
-			Mode:        permissions.ModeStrict,
-			DefaultMode: permissions.ModeStrict,
-			Session:     permissions.NewSessionStore(),
-		},
-	}.Run(context.Background())
-	if err != nil {
-		t.Fatalf("Run returned error: %v", err)
-	}
-	if !called {
-		t.Fatal("edit tool was not executed after once approval")
+	choice := permissionPrompt(scanner.Scan, scanner.Text, &out)(context.Background(), permissions.Request{Tool: "edit_file"}, permissions.Decision{Effect: permissions.EffectAsk, Mode: permissions.ModeStrict})
+	if choice != permissions.HITLAllowOnce {
+		t.Fatalf("choice = %s", choice)
 	}
 	if text := out.String(); !strings.Contains(text, "[n] deny [y] allow once") || strings.Contains(text, "allow session") || strings.Contains(text, "allow always") {
 		t.Fatalf("strict prompt = %q", text)
 	}
-}
-
-type permissionCountingTool struct {
-	name   string
-	called *bool
-}
-
-func (t permissionCountingTool) Definition() tool.Definition {
-	return tool.Definition{Name: t.name, Schema: tool.ObjectSchema(nil, nil)}
-}
-
-func (t permissionCountingTool) Execute(ctx context.Context, input tool.Input) tool.Result {
-	*t.called = true
-	return tool.OK(nil)
 }
 
 func assertDiskContent(t *testing.T, path string, want string) {

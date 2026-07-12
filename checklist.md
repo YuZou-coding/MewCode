@@ -9,6 +9,7 @@
 - [x] 同一工具连续搜索两次只有一个注册项，server 的 `initialize=1`、`tools/list=1`。
 - [x] 一个 server 发现失败时，结果的 `errors` 包含该 server，其他 server 仍可发现和调用。
 - [x] 发现后的远端工具仍经过现有权限检查，并以工具结果回灌模型。
+- [x] TUI 状态栏的 `mcp N` 只统计成功连接的 server。
 - [x] README 与全局提示词包含 `tool_search`、按需发现和精确选择说明。
 - [x] `git diff --check` 无输出。
 - [x] `go test -count=1 ./...` 通过且失败数为 `0`。

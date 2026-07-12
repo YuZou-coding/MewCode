@@ -212,7 +212,7 @@ func writeExternalProjectConfig(t *testing.T, dir string, servers string) {
 	if err := os.MkdirAll(filepath.Join(dir, ".mewcode"), 0700); err != nil {
 		t.Fatalf("mkdir .mewcode: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, ".mewcode", "servers.yaml"), []byte(servers), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, ".mewcode", "mcp_servers.yaml"), []byte(servers), 0600); err != nil {
 		t.Fatalf("write servers: %v", err)
 	}
 }

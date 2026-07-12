@@ -9,7 +9,7 @@ import (
 func TestLoadServersFile(t *testing.T) {
 	root := t.TempDir()
 	path := ServersFile(root)
-	if path != filepath.Join(root, ".mewcode", "servers.yaml") {
+	if path != filepath.Join(root, ".mewcode", "mcp_servers.yaml") {
 		t.Fatalf("ServersFile = %s", path)
 	}
 	servers, err := LoadServersFile(path)
@@ -127,5 +127,45 @@ func TestLoadMergedServersProjectOverridesUser(t *testing.T) {
 	}
 	if byName["user-only"].Command != "/bin/echo" || byName["project-only"].URL == "" {
 		t.Fatalf("merged servers = %#v", byName)
+	}
+}
+
+func TestLoadMergedServersPrefersMCPConfigAndFallsBackToLegacy(t *testing.T) {
+	home := t.TempDir()
+	project := t.TempDir()
+	for _, root := range []string{home, project} {
+		if err := os.MkdirAll(filepath.Join(root, ".mewcode"), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(home, ".mewcode", "servers.yaml"), []byte("servers:\n- name: legacy\n  transport: stdio\n  command: /bin/echo\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".mewcode", "mcp_servers.yaml"), []byte("servers:\n- name: user-preferred\n  transport: stdio\n  command: /bin/echo\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, ".mewcode", "mcp_servers.yaml"), []byte("servers:\n- name: preferred\n  transport: stdio\n  command: /bin/echo\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	servers, warnings, err := LoadMergedMCPServers(project, home)
+	if err != nil {
+		t.Fatalf("LoadMergedMCPServers returned error: %v", err)
+	}
+	if len(servers) != 2 || servers[0].Name != "user-preferred" || servers[1].Name != "preferred" {
+		t.Fatalf("servers = %#v", servers)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("warnings = %#v", warnings)
+	}
+	if err := os.Remove(filepath.Join(home, ".mewcode", "mcp_servers.yaml")); err != nil {
+		t.Fatal(err)
+	}
+	servers, warnings, err = LoadMergedMCPServers(project, home)
+	if err != nil {
+		t.Fatalf("legacy fallback returned error: %v", err)
+	}
+	if len(servers) != 2 || servers[0].Name != "legacy" || len(warnings) != 1 || warnings[0] == "" {
+		t.Fatalf("legacy fallback servers=%#v warnings=%#v", servers, warnings)
 	}
 }

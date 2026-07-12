@@ -178,7 +178,7 @@ func setupResources(options setupOptions, targetRoot string) []setupResource {
 		{name: "notes", source: ".mewcode/notes.md", target: "notes.md"},
 		{name: "skills", source: ".mewcode/skills", target: "skills", dir: true},
 		{name: "workers", source: ".mewcode/workers", target: "workers", dir: true},
-		{name: "servers", source: ".mewcode/servers.yaml", target: "servers.yaml"},
+		{name: "servers", source: ".mewcode/mcp_servers.yaml", target: "mcp_servers.yaml"},
 	}
 	for _, resource := range optionals {
 		if options.all || options.include[resource.name] {
