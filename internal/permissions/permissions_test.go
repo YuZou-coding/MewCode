@@ -99,6 +99,37 @@ func TestRuleMatchingAndPriority(t *testing.T) {
 	}
 }
 
+func TestRuleForRequestUsesToolOnlyForGenericToolMemory(t *testing.T) {
+	first := Request{Tool: "tool_search", Arguments: args(map[string]any{"query": "React useEffect"})}
+	second := Request{Tool: "tool_search", Arguments: args(map[string]any{"query": "MCP OAuth"})}
+
+	rule := RuleForRequest(EffectAllow, SourceSession, first)
+	if rule.ArgsContains != "" {
+		t.Fatalf("generic rule ArgsContains = %q, want empty so changed args do not prompt again", rule.ArgsContains)
+	}
+	if !MatchRule(rule, second) {
+		t.Fatalf("tool-only generic rule did not match changed args: %#v", rule)
+	}
+}
+
+func TestRuleForRequestKeepsPathAndCommandBoundaries(t *testing.T) {
+	pathRule := RuleForRequest(EffectAllow, SourceSession, Request{Tool: "read_file", Arguments: args(map[string]any{"path": "README.md"})})
+	if pathRule.PathPattern != "README.md" || pathRule.ArgsContains != "" {
+		t.Fatalf("path rule = %#v, want path-specific rule without args fallback", pathRule)
+	}
+	if MatchRule(pathRule, Request{Tool: "read_file", Arguments: args(map[string]any{"path": "secrets.txt"})}) {
+		t.Fatalf("path rule matched unrelated path: %#v", pathRule)
+	}
+
+	commandRule := RuleForRequest(EffectAllow, SourceSession, Request{Tool: "run_command", Arguments: args(map[string]any{"command": "git status"})})
+	if commandRule.CommandPattern != "git status" || commandRule.ArgsContains != "" {
+		t.Fatalf("command rule = %#v, want command-specific rule without args fallback", commandRule)
+	}
+	if MatchRule(commandRule, Request{Tool: "run_command", Arguments: args(map[string]any{"command": "rm -rf /tmp/nope"})}) {
+		t.Fatalf("command rule matched unrelated command: %#v", commandRule)
+	}
+}
+
 func TestRulesFileAndSessionStore(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

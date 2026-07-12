@@ -616,6 +616,71 @@ func TestPermissionCheckerReplacesCommandConfirmation(t *testing.T) {
 	}
 }
 
+func TestSessionPermissionForGenericToolDoesNotPromptAgainWhenArgsChange(t *testing.T) {
+	checker := &permissions.Checker{Root: t.TempDir(), Session: permissions.NewSessionStore()}
+	prompts := 0
+	agent := &Agent{
+		PermissionChecker: checker,
+		PermissionPrompt: func(ctx context.Context, request permissions.Request, decision permissions.Decision) permissions.HITLChoice {
+			prompts++
+			return permissions.HITLAllowSession
+		},
+	}
+
+	firstRaw, _ := json.Marshal(map[string]any{"query": "React useEffect"})
+	first := agent.checkPermission(context.Background(), provider.ToolCall{ID: "call_1", Name: "tool_search", Arguments: firstRaw}, make(chan Event, EventBufferSize))
+	if first.Effect != permissions.EffectAllow {
+		t.Fatalf("first decision = %#v", first)
+	}
+	secondRaw, _ := json.Marshal(map[string]any{"query": "MCP OAuth"})
+	second := agent.checkPermission(context.Background(), provider.ToolCall{ID: "call_2", Name: "tool_search", Arguments: secondRaw}, make(chan Event, EventBufferSize))
+	if second.Effect != permissions.EffectAllow {
+		t.Fatalf("second decision = %#v", second)
+	}
+	if prompts != 1 {
+		t.Fatalf("prompts = %d, want 1", prompts)
+	}
+}
+
+func TestAlwaysPermissionForGenericToolSurvivesRestartWithChangedArgs(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	checker := &permissions.Checker{Root: t.TempDir(), Session: permissions.NewSessionStore()}
+	prompts := 0
+	agent := &Agent{
+		PermissionChecker: checker,
+		PermissionPrompt: func(ctx context.Context, request permissions.Request, decision permissions.Decision) permissions.HITLChoice {
+			prompts++
+			return permissions.HITLAllowAlways
+		},
+	}
+	firstRaw, _ := json.Marshal(map[string]any{"query": "React useEffect"})
+	first := agent.checkPermission(context.Background(), provider.ToolCall{ID: "call_1", Name: "tool_search", Arguments: firstRaw}, make(chan Event, EventBufferSize))
+	if first.Effect != permissions.EffectAllow {
+		t.Fatalf("first decision = %#v", first)
+	}
+
+	userRules, err := permissions.LoadRulesFile(permissions.UserRulesFile(), permissions.SourceUser)
+	if err != nil {
+		t.Fatalf("LoadRulesFile returned error: %v", err)
+	}
+	restarted := &Agent{
+		PermissionChecker: &permissions.Checker{Root: t.TempDir(), Session: permissions.NewSessionStore(), User: userRules},
+		PermissionPrompt: func(ctx context.Context, request permissions.Request, decision permissions.Decision) permissions.HITLChoice {
+			t.Fatalf("prompted after restart for changed args: %#v", request)
+			return permissions.HITLAllowOnce
+		},
+	}
+	secondRaw, _ := json.Marshal(map[string]any{"query": "MCP OAuth"})
+	second := restarted.checkPermission(context.Background(), provider.ToolCall{ID: "call_2", Name: "tool_search", Arguments: secondRaw}, make(chan Event, EventBufferSize))
+	if second.Effect != permissions.EffectAllow {
+		t.Fatalf("second decision = %#v", second)
+	}
+	if prompts != 1 {
+		t.Fatalf("prompts = %d, want 1", prompts)
+	}
+}
+
 func TestStrictPermissionRejectsPersistentApproval(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	checker := &permissions.Checker{Root: t.TempDir(), Mode: permissions.ModeStrict, DefaultMode: permissions.ModeStrict, Session: permissions.NewSessionStore()}

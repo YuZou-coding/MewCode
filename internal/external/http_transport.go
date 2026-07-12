@@ -19,6 +19,7 @@ type HTTPTransport struct {
 	url       string
 	headers   map[string]string
 	client    HTTPDoer
+	oauth     *MCPOAuthProvider
 	mu        sync.Mutex
 	sessionID string
 }
@@ -56,24 +57,29 @@ func (t *HTTPTransport) Send(ctx context.Context, data []byte) error {
 }
 
 func (t *HTTPTransport) send(ctx context.Context, data []byte) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, t.url, bytes.NewReader(bytes.TrimSpace(data)))
+	bearer := ""
+	if t.oauth != nil && !hasHeader(t.headers, "Authorization") {
+		token, err := t.oauth.BearerToken(ctx)
+		if err != nil {
+			return nil, err
+		}
+		bearer = token
+	}
+	resp, err := t.sendOnce(ctx, data, bearer)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "text/event-stream, application/json")
-	for name, value := range t.headers {
-		req.Header.Set(name, value)
-	}
-	t.mu.Lock()
-	sessionID := t.sessionID
-	t.mu.Unlock()
-	if sessionID != "" {
-		req.Header.Set("Mcp-Session-Id", sessionID)
-	}
-	resp, err := t.client.Do(req)
-	if err != nil {
-		return nil, err
+	if resp.StatusCode == http.StatusUnauthorized && t.oauth != nil && !hasHeader(t.headers, "Authorization") {
+		header := resp.Header.Clone()
+		_ = resp.Body.Close()
+		token, err := t.oauth.HandleUnauthorized(ctx, header)
+		if err != nil {
+			return nil, err
+		}
+		resp, err = t.sendOnce(ctx, data, token)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		_ = resp.Body.Close()
@@ -85,6 +91,41 @@ func (t *HTTPTransport) send(ctx context.Context, data []byte) (*http.Response, 
 		t.mu.Unlock()
 	}
 	return resp, nil
+}
+
+func (t *HTTPTransport) sendOnce(ctx context.Context, data []byte, bearerToken string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, t.url, bytes.NewReader(bytes.TrimSpace(data)))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "text/event-stream, application/json")
+	for name, value := range t.headers {
+		req.Header.Set(name, value)
+	}
+	if bearerToken != "" {
+		req.Header.Set("Authorization", "Bearer "+bearerToken)
+	}
+	t.mu.Lock()
+	sessionID := t.sessionID
+	t.mu.Unlock()
+	if sessionID != "" {
+		req.Header.Set("Mcp-Session-Id", sessionID)
+	}
+	resp, err := t.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+func hasHeader(headers map[string]string, name string) bool {
+	for key := range headers {
+		if strings.EqualFold(key, name) {
+			return true
+		}
+	}
+	return false
 }
 
 func (t *HTTPTransport) Close() error {

@@ -1,17 +1,20 @@
-# MewCode MCP 标准兼容与 HTTP 认证验收清单
+# MewCode 通用 MCP OAuth 与权限记忆验收清单
 
-- [x] `initialize` 请求的 `params.protocolVersion` 为 `2025-06-18`，`params.capabilities` 为对象，`params.clientInfo.name` 为 `MewCode`，且 `params.clientInfo.version` 为非空字符串。
-- [x] server 返回受支持的协议版本后，下一条消息是无 `id` 的 `notifications/initialized`，之后才出现 `tools/list`。
-- [x] server 返回不受支持的 `protocolVersion` 时，该 server 不进入已连接状态，错误中包含返回的版本。
-- [x] stdio 与 HTTP 测试均观察到 `initialize`、`notifications/initialized`、`tools/list` 的相同顺序。
-- [x] 配置 `headers.Authorization: "Bearer ${CONTEXT7_API_KEY}"` 时，配置校验明确拒绝该复合模板；配置 `headers.CONTEXT7_API_KEY: "${CONTEXT7_API_KEY}"` 时完整展开环境变量值。
-- [x] `CONTEXT7_API_KEY` 未设置时，发现结果包含 server 名和 `CONTEXT7_API_KEY`，MewCode 仍可继续对话和使用本地工具。
-- [x] HTTP 测试 server 在 `initialize`、`tools/list` 和 `tools/call` 请求中均收到配置的 Header。
-- [x] 认证 server 返回 HTTP 401 时，错误包含 server 名和状态码 `401`，但不包含 Header 值或测试令牌 `mewcode-secret-credential`。
-- [x] 搜索测试输出、错误文本和工具结果，`grep -r "mewcode-secret-credential"` 返回 0 条非测试夹具泄漏。
-- [x] 一个 MCP server 因配置、认证或握手失败时，另一个 server 仍能完成搜索并调用工具。
-- [x] 启动含 MCP 配置的 MewCode 后，在调用 `tool_search` 前测试 server 收到的请求数为 0。
-- [x] 同一 server 连续搜索两次，只出现 1 次 `initialize`、1 次 `notifications/initialized` 和 1 次 `tools/list`。
-- [x] README 的 Context7 示例只包含一个 HTTP server，并通过 `${CONTEXT7_API_KEY}` 引用认证环境变量，不包含真实密钥或 stdio 备选项。
-- [ ] 设置有效 `CONTEXT7_API_KEY` 后启动 MewCode，按需搜索 Context7 可看到至少 1 个远端工具，并能完成 1 次工具调用。
+- [x] HTTP MCP 返回 401 且 `WWW-Authenticate` 含 `resource_metadata` 时，MewCode 会请求 resource metadata。
+- [x] resource metadata 的第一个 `authorization_servers` 会被用于获取 authorization server metadata。
+- [x] authorization request 包含 `response_type=code`、`client_id`、`redirect_uri`、`code_challenge`、`code_challenge_method=S256`、`state` 和 `resource=<MCP server URL>`。
+- [x] token request 包含 `grant_type=authorization_code`、`code`、`redirect_uri`、`client_id`、`code_verifier` 和同一个 `resource`。
+- [x] token 刷新 request 包含 `grant_type=refresh_token`、`refresh_token`、`client_id` 和 `resource`。
+- [x] token 缓存在 `~/.mewcode/oauth/`，目录权限为 `0700`，文件权限为 `0600`。
+- [x] 缓存命中且未过期时，不打开浏览器、不重复授权，HTTP 请求直接带 `Authorization: Bearer <token>`。
+- [x] access token 过期且 refresh token 可用时，自动刷新并更新缓存。
+- [x] refresh 失败或无 refresh token 时，重新触发浏览器登录。
+- [x] OAuth token、refresh token、authorization code 和 client secret 不出现在错误文本、工具结果、测试日志或仓库文件中。
+- [x] stdio MCP server 不触发 OAuth discovery 或浏览器登录。
+- [x] 一个 OAuth MCP server 登录失败时，其他 MCP server 和本地工具仍可继续使用。
+- [x] 选择 `s` 允许 `tool_search` 本会话后，同一会话内不同 query 不再重复询问。
+- [x] 选择 `a` 永久允许 `tool_search` 后，重启后不同 query 不再重复询问。
+- [x] 文件工具的允许规则仍按代表路径生效，不扩大到所有路径。
+- [x] 命令工具的允许规则仍按命令内容生效，不扩大到所有命令。
 - [x] `go test -count=1 ./...` 通过。
+- [x] `go test -race -count=1 ./internal/external ./internal/rpc ./internal/agent` 通过。

@@ -56,9 +56,6 @@ func RuleForRequest(effect Effect, source Source, request Request) Rule {
 	if request.Tool == "run_command" {
 		rule.CommandPattern = commandFromArgs(request.Arguments)
 	}
-	if rule.PathPattern == "" && rule.CommandPattern == "" {
-		rule.ArgsContains = compactArgs(request.Arguments)
-	}
 	return rule
 }
 

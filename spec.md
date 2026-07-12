@@ -1,53 +1,50 @@
-# MewCode MCP 标准兼容与 HTTP 认证规格
+# MewCode 通用 MCP OAuth 与权限记忆规格
 
 ## 背景
 
-MewCode 的 MCP 初始化需要符合标准协议，否则标准 server 会因缺少必要字段而拒绝握手。HTTP transport 还需要支持认证 Header，让需要令牌的远端 server 能安全接入。外部 server 故障仍不应拖慢或阻断终端 Agent 启动。
+MewCode 已支持 stdio 与 HTTP MCP tools 基础流程，但 HTTP MCP 只能使用静态 Header 认证。Context7 这类遵循 MCP Authorization 规范的 server 可通过 OAuth 登录，不应要求用户手动维护 API key。与此同时，用户选择本会话允许或永久允许某类工具后，MewCode 不应因为无关参数变化反复询问相同权限。
 
 ## 目标用户
 
-- 使用标准 stdio 或 Streamable HTTP MCP server 的 MewCode 用户。
-- 需要通过环境变量安全配置 HTTP MCP 认证信息的开发者。
-- 配置多个外部 server，并要求单个 server 故障不影响主流程的用户。
+- 使用需要 OAuth 登录的 HTTP MCP server 的 MewCode 用户。
+- 需要同时接入多个标准 HTTP MCP server 的开发者。
+- 希望权限确认结果符合“工具、路径、命令”直觉边界的终端用户。
 
 ## 能力清单
 
-- MewCode 按 MCP 标准完成初始化请求、版本协商和初始化完成通知。
-- stdio 与 HTTP transport 复用同一套 MCP 生命周期语义。
-- HTTP server 可配置任意请求 Header。
-- Header 值可引用运行环境中的变量，避免在配置文件中保存认证令牌。
-- Header 环境变量缺失时，对应 server 返回可诊断错误，其他 server 和 MewCode 主流程继续运行。
-- 启动时只加载 MCP server 配置，按需搜索时才连接、认证和发现工具。
-- 模型通过 `tool_search` 按关键词搜索或用精确本地名称加载远端工具。
-- 同一会话内复用已成功初始化的连接、工具发现结果和注册结果。
-- 所有用户可见错误和诊断输出隐藏 Header、环境变量展开值及认证令牌。
-- 文档提供仅使用 HTTP transport 的 Context7 配置示例。
+- HTTP MCP server 返回 OAuth 401 时，MewCode 可按 MCP Authorization 规范发现授权信息。
+- MewCode 使用浏览器登录、本地 loopback 回调和 PKCE 完成 OAuth 授权码流程。
+- OAuth token 按 server URL 缓存在 `~/.mewcode/oauth/`，重启后可复用。
+- access token 过期时优先使用 refresh token 刷新；刷新失败时重新触发浏览器登录。
+- 后续 HTTP MCP 请求自动携带 `Authorization: Bearer <token>`。
+- OAuth token、授权码、refresh token、client secret 不进入日志、错误、工具结果或仓库。
+- stdio MCP 不走 OAuth 流程，继续由命令环境自行处理凭据。
+- 对没有路径和命令边界的工具，本会话允许/永久允许按工具名记忆，避免同一工具因参数变化重复询问。
+- 对文件工具仍按代表路径记忆；对命令工具仍按命令模式记忆。
 
 ## 非功能要求
 
-- 遵循 MCP 初始化生命周期和 JSON-RPC 消息顺序。
-- 不改变用户级与项目级 server 配置的合并和同名覆盖规则。
-- 认证数据不得进入日志、工具结果或错误文本。
-- 单个 server 的配置、认证、握手或发现失败不得阻断启动和其他 server。
-- 协议、配置、transport、失败隔离和脱敏行为均由自动化测试覆盖。
+- OAuth 实现遵循 MCP `2025-06-18` Authorization 规范中的 OAuth 2.1、Protected Resource Metadata、Authorization Server Metadata、PKCE 和 Resource Indicators 要求。
+- OAuth 客户端不写死 Context7；server URL、metadata、client registration、token endpoint 都通过标准发现得到。
+- token 缓存文件权限为 `0600`，目录权限为 `0700`。
+- 用户取消登录、浏览器打开失败、metadata 缺失、动态注册失败、token 刷新失败都返回可诊断但不含密钥的错误。
+- 权限记忆规则必须有自动化测试覆盖，证明 `tool_search` 参数变化不会重复询问。
 
 ## 设计骨架
 
-- 外部 Client 负责 MCP 初始化状态机、服务端结果校验和工具调用前置条件。
-- JSON-RPC 调用边界同时支持有响应的请求和无响应的通知，两种 transport 保持一致行为。
-- 配置加载层解析 Header 映射并标记环境变量引用；连接建立时从进程环境解析实际值。
-- HTTP transport 仅负责把已解析 Header 附加到每个请求，不记录或拼接敏感值到错误中。
-- 外部管理器按需创建 Client，并以逐 server 结果隔离连接、认证和发现错误。
-- `tool_search` 负责选择候选 server、过滤匹配项并注册远端执行器。
-- 已成功协商的协议版本和连接状态只保存在当前会话内。
+- `internal/external/oauth.go` 负责 OAuth discovery、PKCE、loopback callback、token exchange、refresh 和 token store。
+- `HTTPTransport` 在收到 401 且存在 OAuth metadata 时调用 OAuth provider 获取 token，并带 token 重试一次请求。
+- OAuth token store 以 server URL 的 SHA-256 作为文件名，避免路径非法字符和泄漏 server 细节。
+- `ServerConfig` 保持静态 headers 兼容；未配置 headers 时也可通过 401 自动 OAuth。
+- 权限规则生成仍集中在 `permissions.RuleForRequest`，仅调整无路径/无命令工具的 fallback 行为。
 
 ## 不做范围
 
-- 不实现 OAuth 登录、浏览器授权或令牌刷新。
-- 不把认证令牌写入 MewCode 配置、缓存或会话文件。
-- 不支持 Header 值中的复合模板、默认值表达式或命令替换。
-- 不同时保留 Context7 的 HTTP 与 stdio 示例配置。
-- 不持久化 MCP 连接或工具发现状态。
+- 不为 stdio transport 实现 OAuth。
+- 不实现 MCP resources/prompts 的一等能力。
+- 不实现多个 authorization server 的交互式选择；默认选择 metadata 中第一个。
+- 不实现手动粘贴 token/code 的备用 UI。
+- 不把 token 同步到项目配置或会话文件。
 
 ## 完成定义
 

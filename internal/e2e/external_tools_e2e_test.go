@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"mewcode/internal/app"
 	"mewcode/internal/config"
@@ -66,6 +67,43 @@ func TestExternalHTTPToolEndToEnd(t *testing.T) {
 	}
 	if clientHTTP.counts["initialize"] != 1 || clientHTTP.counts["notifications/initialized"] != 1 || clientHTTP.counts["tools/list"] != 1 || clientHTTP.counts["tools/call"] != 1 {
 		t.Fatalf("counts = %#v", clientHTTP.counts)
+	}
+}
+
+func TestExternalHTTPOAuthCachedTokenEndToEnd(t *testing.T) {
+	tempDir := t.TempDir()
+	home := filepath.Join(tempDir, "home")
+	if err := external.NewOAuthTokenStore(home).Save("http://external.test/mcp", external.OAuthTokenRecord{
+		AccessToken: "cached-oauth-token",
+		TokenType:   "Bearer",
+		ExpiresAt:   time.Now().Add(time.Hour),
+	}); err != nil {
+		t.Fatalf("Save returned error: %v", err)
+	}
+	clientHTTP := &scriptedExternalHTTP{handler: func(w http.ResponseWriter, r *http.Request, counts map[string]int) {
+		if got := r.Header.Get("Authorization"); got != "Bearer cached-oauth-token" {
+			t.Fatalf("Authorization = %q", got)
+		}
+		var req map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		w.Header().Set("Content-Type", "text/event-stream")
+		switch req["method"] {
+		case "initialize":
+			fmt.Fprintf(w, "data: {\"jsonrpc\":\"2.0\",\"id\":%q,\"result\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"serverInfo\":{\"name\":\"clock\",\"version\":\"1\"}}}\n\n", req["id"])
+		case "notifications/initialized":
+		case "tools/list":
+			fmt.Fprintf(w, "data: {\"jsonrpc\":\"2.0\",\"id\":%q,\"result\":{\"tools\":[{\"name\":\"time\",\"description\":\"Time tool\",\"inputSchema\":{\"type\":\"object\"}}]}}\n\n", req["id"])
+		case "tools/call":
+			fmt.Fprintf(w, "data: {\"jsonrpc\":\"2.0\",\"id\":%q,\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"oauth time result\"}]}}\n\n", req["id"])
+		}
+	}}
+
+	writeModelConfig(t, tempDir)
+	manager := external.NewManager([]external.ServerConfig{{Name: "clock", Transport: "http", URL: "http://external.test/mcp"}}, clientHTTP)
+	client := externalToolProvider(t, "external_clock_time", map[string]any{}, "oauth time result")
+	out := runExternalProjectWithManager(t, tempDir, manager, "time\ny\ny\n/exit\n", client)
+	if !strings.Contains(out, "oauth time result") {
+		t.Fatalf("output = %q", out)
 	}
 }
 

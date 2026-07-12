@@ -91,6 +91,7 @@ func NewClientFromConfig(ctx context.Context, cfg ServerConfig, httpClient HTTPD
 			return nil, err
 		}
 		transport := NewHTTPTransport(cfg.URL, headers, httpClient)
+		transport.oauth = NewMCPOAuthProvider(cfg.URL, httpClient, NewOAuthTokenStore(""))
 		client := NewClient(cfg.Name, httpCaller{transport: transport}, timeout, transport.Close)
 		for _, value := range headers {
 			if value != "" {

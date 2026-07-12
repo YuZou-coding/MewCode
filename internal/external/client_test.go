@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -133,5 +135,44 @@ func TestClientRedactsConfiguredHeaderValuesFromErrors(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), secret) || !strings.Contains(err.Error(), "[REDACTED]") {
 		t.Fatalf("error was not redacted: %v", err)
+	}
+}
+
+func TestNewClientFromConfigHTTPUsesCachedOAuthToken(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := NewOAuthTokenStore(home).Save("http://server.test/mcp", OAuthTokenRecord{
+		AccessToken: "cached-access-token",
+		TokenType:   "Bearer",
+		ExpiresAt:   time.Now().Add(time.Hour),
+	}); err != nil {
+		t.Fatalf("Save returned error: %v", err)
+	}
+	requests := 0
+	httpClient := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		requests++
+		if got := req.Header.Get("Authorization"); got != "Bearer cached-access-token" {
+			t.Fatalf("Authorization = %q", got)
+		}
+		switch requests {
+		case 1:
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body:       io.NopCloser(strings.NewReader(`{"jsonrpc":"2.0","id":"1","result":{"protocolVersion":"2025-06-18","capabilities":{},"serverInfo":{"name":"fake","version":"1"}}}`)),
+			}, nil
+		case 2:
+			return &http.Response{StatusCode: http.StatusAccepted, Body: io.NopCloser(strings.NewReader(""))}, nil
+		default:
+			t.Fatalf("unexpected request %d", requests)
+		}
+		return nil, nil
+	})
+	client, err := NewClientFromConfig(context.Background(), ServerConfig{Name: "oauth", Transport: "http", URL: "http://server.test/mcp"}, httpClient)
+	if err != nil {
+		t.Fatalf("NewClientFromConfig returned error: %v", err)
+	}
+	if err := client.Initialize(context.Background()); err != nil {
+		t.Fatalf("Initialize returned error: %v", err)
 	}
 }

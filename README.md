@@ -387,11 +387,13 @@ servers:
 
 Header 可使用普通字面值，或使用完整的 `${ENV_NAME}` 环境变量引用。为避免认证数据意外进入配置和错误输出，不支持 `Bearer ${TOKEN}` 这类复合模板；需要前缀时应把完整 Header 值放入环境变量。变量缺失只会让对应 server 发现失败，不会阻断 MewCode 或其他 server。
 
+遵循 MCP Authorization 规范的 HTTP server 也可以不配置 Header。server 返回带 `resource_metadata` 的 401 后，MewCode 会通过浏览器打开授权页，使用 `127.0.0.1` 本地回调和 PKCE 完成登录，并把 token 按 server URL 缓存在 `~/.mewcode/oauth/`。该目录权限为 `0700`，token 文件权限为 `0600`；后续请求会自动携带 `Authorization: Bearer <token>`，access token 过期时会优先用 refresh token 刷新。OAuth 只适用于 HTTP transport，stdio server 的凭据仍由命令环境自行处理。
+
 初始工具列表只包含内置 `tool_search`，不包含远端工具。模型可用关键词搜索 server 名称、远端工具名称或能力描述；已知完整名称时，可用 `select:external_local_tools_query` 精确加载。精确加载只连接名称对应的 server，无法解析 server 时返回错误，不会扫描全部 server。匹配工具注册后会出现在下一轮模型请求中。
 
 远端工具使用包含 server 身份的本地名称注册，例如 `external_local_tools_query`。这样不会覆盖内置 `read_file` 等本地工具；多个 server 提供同名工具时也能区分来源。同一会话内，MewCode 会缓存每个 server 的连接、工具列表和注册结果，重复搜索或连续调用不会重复握手、重新发现或重复注册工具。
 
-排查外部工具问题时，优先确认 `~/.mewcode/mcp_servers.yaml` 或 `.mewcode/mcp_servers.yaml` 是否存在、server 名称是否唯一、项目级同名覆盖是否符合预期、Header 引用的环境变量是否已设置、stdio 命令是否可执行、HTTP URL 是否可访问，以及调用 `tool_search` 后工具是否出现在下一轮模型请求中。认证错误只显示 server、环境变量名或 HTTP 状态码，不回显 Header 和令牌值。
+排查外部工具问题时，优先确认 `~/.mewcode/mcp_servers.yaml` 或 `.mewcode/mcp_servers.yaml` 是否存在、server 名称是否唯一、项目级同名覆盖是否符合预期、Header 引用的环境变量是否已设置、stdio 命令是否可执行、HTTP URL 是否可访问、OAuth 登录是否在浏览器完成，以及调用 `tool_search` 后工具是否出现在下一轮模型请求中。认证错误只显示 server、环境变量名或 HTTP 状态码，不回显 Header、token、授权码或 client secret。
 
 ## 上下文压缩
 

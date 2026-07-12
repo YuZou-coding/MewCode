@@ -131,3 +131,105 @@ func TestHTTPTransportReusesMCPSessionID(t *testing.T) {
 		t.Fatalf("second send returned error: %v", err)
 	}
 }
+
+func TestHTTPTransportAddsCachedOAuthBearerToken(t *testing.T) {
+	store := NewOAuthTokenStore(t.TempDir())
+	if err := store.Save("http://server.test/mcp", OAuthTokenRecord{
+		AccessToken: "cached-access-token",
+		TokenType:   "Bearer",
+		ExpiresAt:   time.Now().Add(time.Hour),
+	}); err != nil {
+		t.Fatalf("Save returned error: %v", err)
+	}
+	transport := NewHTTPTransport("http://server.test/mcp", nil, roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if got := req.Header.Get("Authorization"); got != "Bearer cached-access-token" {
+			t.Fatalf("Authorization = %q", got)
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"content-type": []string{"application/json"}},
+			Body:       io.NopCloser(strings.NewReader(`{"jsonrpc":"2.0","id":"1","result":{"ok":true}}`)),
+		}, nil
+	}))
+	transport.oauth = NewMCPOAuthProvider("http://server.test/mcp", transport.client, store)
+
+	if _, err := transport.SendAndReceive(context.Background(), []byte(`{"jsonrpc":"2.0","id":"1","method":"tools/list"}`)); err != nil {
+		t.Fatalf("SendAndReceive returned error: %v", err)
+	}
+}
+
+func TestHTTPTransportOAuth401ObtainsTokenAndRetriesOnce(t *testing.T) {
+	ctx := context.Background()
+	requests := 0
+	var openedURL string
+	client := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		switch req.URL.String() {
+		case "http://server.test/mcp":
+			requests++
+			if requests == 1 {
+				if got := req.Header.Get("Authorization"); got != "" {
+					t.Fatalf("initial Authorization = %q", got)
+				}
+				return &http.Response{
+					StatusCode: http.StatusUnauthorized,
+					Header: http.Header{
+						"WWW-Authenticate": []string{`Bearer resource_metadata="http://server.test/.well-known/oauth-protected-resource/mcp"`},
+					},
+					Body: io.NopCloser(strings.NewReader("login required")),
+				}, nil
+			}
+			if requests == 2 {
+				if got := req.Header.Get("Authorization"); got != "Bearer transport-access-token" {
+					t.Fatalf("retry Authorization = %q", got)
+				}
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Header:     http.Header{"content-type": []string{"application/json"}},
+					Body:       io.NopCloser(strings.NewReader(`{"jsonrpc":"2.0","id":"1","result":{"ok":true}}`)),
+				}, nil
+			}
+			t.Fatalf("unexpected MCP request count %d", requests)
+		case "http://server.test/.well-known/oauth-protected-resource/mcp":
+			return jsonResponse(http.StatusOK, map[string]any{"authorization_servers": []string{"http://auth.test"}}), nil
+		case "http://auth.test/.well-known/oauth-authorization-server":
+			return jsonResponse(http.StatusOK, map[string]any{
+				"authorization_endpoint": "http://auth.test/authorize",
+				"token_endpoint":         "http://auth.test/token",
+				"registration_endpoint":  "http://auth.test/register",
+			}), nil
+		case "http://auth.test/register":
+			return jsonResponse(http.StatusCreated, map[string]any{"client_id": "client-abc"}), nil
+		case "http://auth.test/token":
+			return jsonResponse(http.StatusOK, map[string]any{
+				"access_token":  "transport-access-token",
+				"refresh_token": "transport-refresh-token",
+				"token_type":    "Bearer",
+				"expires_in":    3600,
+			}), nil
+		default:
+			t.Fatalf("unexpected request: %s", req.URL.String())
+		}
+		return nil, nil
+	})
+	transport := NewHTTPTransport("http://server.test/mcp", nil, client)
+	transport.oauth = NewMCPOAuthProvider("http://server.test/mcp", client, NewOAuthTokenStore(t.TempDir()))
+	transport.oauth.openURL = func(raw string) error {
+		openedURL = raw
+		return nil
+	}
+	transport.oauth.redirectServer = fakeOAuthRedirectServer{code: "transport-auth-code"}
+
+	raw, err := transport.SendAndReceive(ctx, []byte(`{"jsonrpc":"2.0","id":"1","method":"tools/list"}`))
+	if err != nil {
+		t.Fatalf("SendAndReceive returned error: %v", err)
+	}
+	if !strings.Contains(string(raw), `"result"`) {
+		t.Fatalf("raw = %s", raw)
+	}
+	if requests != 2 {
+		t.Fatalf("MCP request count = %d, want 2", requests)
+	}
+	if !strings.Contains(openedURL, "resource=http%3A%2F%2Fserver.test%2Fmcp") {
+		t.Fatalf("authorization URL missing resource: %s", openedURL)
+	}
+}
