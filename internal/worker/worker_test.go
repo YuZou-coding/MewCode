@@ -199,6 +199,39 @@ func TestManagerMovesSlowForegroundWorkerToBackgroundWithoutRestart(t *testing.T
 	}
 }
 
+func TestWaitForRunningWorkersBlocksUntilCompletion(t *testing.T) {
+	manager := NewManager(LoadResult{Roles: map[string]Role{"explore": {Name: "explore"}}}, Options{})
+	started := make(chan struct{})
+	finish := make(chan struct{})
+	manager.Runner = func(ctx context.Context, req RunRequest) RunResult {
+		close(started)
+		select {
+		case <-finish:
+			return RunResult{Text: "done"}
+		case <-ctx.Done():
+			return RunResult{Error: ctx.Err()}
+		}
+	}
+	result := manager.Run(context.Background(), RunRequest{Task: "inspect", RoleName: "explore", Background: true})
+	if !result.OK {
+		t.Fatalf("background run = %#v", result)
+	}
+	<-started
+	done := make(chan struct{})
+	go func() { manager.WaitForRunning(context.Background()); close(done) }()
+	select {
+	case <-done:
+		t.Fatal("wait returned before worker completed")
+	case <-time.After(20 * time.Millisecond):
+	}
+	close(finish)
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("wait did not return after worker completed")
+	}
+}
+
 func TestRunWorkerToolUsesRoleAndForkDefaults(t *testing.T) {
 	manager := NewManager(LoadResult{Roles: map[string]Role{"explore": {Name: "explore"}}}, Options{})
 	var requests []RunRequest

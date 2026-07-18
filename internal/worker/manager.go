@@ -219,6 +219,25 @@ func (m *Manager) RunningCount() int {
 	return count
 }
 
+// WaitForRunning blocks until all currently running workers finish.
+func (m *Manager) WaitForRunning(ctx context.Context) {
+	if m == nil {
+		return
+	}
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if m.RunningCount() == 0 {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
 func (m *Manager) RecentCompletedCount() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()

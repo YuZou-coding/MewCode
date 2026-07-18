@@ -190,6 +190,9 @@ func (l Loop) Run(ctx context.Context) error {
 		if result.SendToAgent != "" {
 			text = result.SendToAgent
 		}
+		if l.WorkerManager != nil {
+			l.WorkerManager.WaitForRunning(ctx)
+		}
 
 		if _, err := fmt.Fprint(output, "MewCode > thinking..."); err != nil {
 			return err

@@ -312,6 +312,9 @@ func (a App) Run(ctx context.Context) error {
 func newFullscreenSubmit(loop tui.Loop, updater *memory.Updater, errorsOut io.Writer) tuiapp.SubmitFunc {
 	turns := 0
 	return func(ctx context.Context, text string, permissionPrompt tuiapp.PermissionPromptFunc) <-chan tuiapp.StreamEvent {
+		if loop.WorkerManager != nil {
+			loop.WorkerManager.WaitForRunning(ctx)
+		}
 		source := runAgentForTUI(ctx, loop, text, permissionPrompt)
 		out := make(chan tuiapp.StreamEvent, agent.EventBufferSize)
 		go func() {
