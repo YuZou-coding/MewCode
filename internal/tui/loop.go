@@ -190,18 +190,17 @@ func (l Loop) Run(ctx context.Context) error {
 		if result.SendToAgent != "" {
 			text = result.SendToAgent
 		}
-		if l.WorkerManager != nil {
-			l.WorkerManager.WaitForRunning(ctx)
-			for _, notification := range l.WorkerManager.PendingNotifications() {
-				fmt.Fprintf(output, "MewCode > worker %s %s: %s\n", notification.TaskID, notification.Status, notificationResult(notification))
-			}
-		}
-
 		if _, err := fmt.Fprint(output, "MewCode > thinking..."); err != nil {
 			return err
 		}
 		if err := l.runAgentTurn(ctx, scanner, output, errorsOut, session, text, func(usage provider.Usage) { controller.lastUsage = usage }); err != nil {
 			return err
+		}
+		if l.WorkerManager != nil {
+			l.WorkerManager.WaitForRunning(ctx)
+			for _, notification := range l.WorkerManager.PendingNotifications() {
+				fmt.Fprintf(output, "MewCode > worker %s %s: %s\n", notification.TaskID, notification.Status, notificationResult(notification))
+			}
 		}
 	}
 }

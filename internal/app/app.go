@@ -329,6 +329,12 @@ func newFullscreenSubmit(loop tui.Loop, updater *memory.Updater, errorsOut io.Wr
 				case out <- event:
 				}
 			}
+			if loop.WorkerManager != nil {
+				loop.WorkerManager.WaitForRunning(ctx)
+				for _, notification := range loop.WorkerManager.PendingNotifications() {
+					out <- tuiapp.StreamEvent{Kind: tuiapp.StreamTextDelta, Text: fmt.Sprintf("worker %s %s: %s\n", notification.TaskID, notification.Status, workerNotificationResult(notification))}
+				}
+			}
 			turns++
 			if updater != nil {
 				if err := updater.MaybeUpdate(ctx, turns, loop.Session.Messages()); err != nil {
