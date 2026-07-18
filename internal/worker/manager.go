@@ -258,6 +258,15 @@ func (m *Manager) DrainNotifications() []Notification {
 	return items
 }
 
+func (m *Manager) PendingNotifications() []Notification {
+	if m == nil {
+		return nil
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]Notification(nil), m.notifications...)
+}
+
 func (m *Manager) ContextMessages() []chat.Message {
 	if m == nil {
 		return nil

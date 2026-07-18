@@ -192,6 +192,9 @@ func (l Loop) Run(ctx context.Context) error {
 		}
 		if l.WorkerManager != nil {
 			l.WorkerManager.WaitForRunning(ctx)
+			for _, notification := range l.WorkerManager.PendingNotifications() {
+				fmt.Fprintf(output, "MewCode > worker %s %s: %s\n", notification.TaskID, notification.Status, notificationResult(notification))
+			}
 		}
 
 		if _, err := fmt.Fprint(output, "MewCode > thinking..."); err != nil {
@@ -201,6 +204,13 @@ func (l Loop) Run(ctx context.Context) error {
 			return err
 		}
 	}
+}
+
+func notificationResult(notification worker.Notification) string {
+	if notification.Error != "" {
+		return notification.Error
+	}
+	return notification.Result
 }
 
 func PrintBanner(w io.Writer) error {

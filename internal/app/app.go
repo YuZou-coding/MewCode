@@ -312,11 +312,14 @@ func (a App) Run(ctx context.Context) error {
 func newFullscreenSubmit(loop tui.Loop, updater *memory.Updater, errorsOut io.Writer) tuiapp.SubmitFunc {
 	turns := 0
 	return func(ctx context.Context, text string, permissionPrompt tuiapp.PermissionPromptFunc) <-chan tuiapp.StreamEvent {
+		out := make(chan tuiapp.StreamEvent, agent.EventBufferSize)
 		if loop.WorkerManager != nil {
 			loop.WorkerManager.WaitForRunning(ctx)
+			for _, notification := range loop.WorkerManager.PendingNotifications() {
+				out <- tuiapp.StreamEvent{Kind: tuiapp.StreamTextDelta, Text: fmt.Sprintf("worker %s %s: %s\n", notification.TaskID, notification.Status, workerNotificationResult(notification))}
+			}
 		}
 		source := runAgentForTUI(ctx, loop, text, permissionPrompt)
-		out := make(chan tuiapp.StreamEvent, agent.EventBufferSize)
 		go func() {
 			defer close(out)
 			for event := range source {
@@ -337,6 +340,13 @@ func newFullscreenSubmit(loop tui.Loop, updater *memory.Updater, errorsOut io.Wr
 		}()
 		return out
 	}
+}
+
+func workerNotificationResult(notification worker.Notification) string {
+	if notification.Error != "" {
+		return notification.Error
+	}
+	return notification.Result
 }
 
 func bindSessionStore(session *chat.Session, store *sessionstore.SessionStore, errorsOut io.Writer) {
