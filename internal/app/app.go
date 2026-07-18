@@ -265,7 +265,6 @@ func (a App) Run(ctx context.Context) error {
 		SessionStore:      activeStore,
 		SessionCatalog:    *catalog,
 		Notes:             notes,
-		NoteUpdater:       noteUpdater,
 		NoTypeDelay:       a.NoTypeDelay,
 		SkillManager:      skillManager,
 		HookEngine:        hookEngine,
@@ -298,12 +297,43 @@ func (a App) Run(ctx context.Context) error {
 			input = os.Stdin
 		}
 		controller := tui.NewController(&loop, ctx, io.Discard, errs, loop.Session)
-		submit := func(ctx context.Context, text string, permissionPrompt tuiapp.PermissionPromptFunc) <-chan tuiapp.StreamEvent {
-			return runAgentForTUI(ctx, loop, text, permissionPrompt)
+		submit := newFullscreenSubmit(loop, noteUpdater, errs)
+		err = tuiapp.Run(ctx, input, out, cmdRegistry, controller, submit)
+		if err == nil && len(session.Messages()) > 0 {
+			if updateErr := noteUpdater.Update(ctx, session.Messages()); updateErr != nil {
+				_, _ = fmt.Fprintf(errs, "notes update failed: %v\n", updateErr)
+			}
 		}
-		return tuiapp.Run(ctx, input, out, cmdRegistry, controller, submit)
+		return err
 	}
 	return loop.Run(ctx)
+}
+
+func newFullscreenSubmit(loop tui.Loop, updater *memory.Updater, errorsOut io.Writer) tuiapp.SubmitFunc {
+	turns := 0
+	return func(ctx context.Context, text string, permissionPrompt tuiapp.PermissionPromptFunc) <-chan tuiapp.StreamEvent {
+		source := runAgentForTUI(ctx, loop, text, permissionPrompt)
+		out := make(chan tuiapp.StreamEvent, agent.EventBufferSize)
+		go func() {
+			defer close(out)
+			for event := range source {
+				select {
+				case <-ctx.Done():
+					return
+				case out <- event:
+				}
+			}
+			turns++
+			if updater != nil {
+				if err := updater.MaybeUpdate(ctx, turns, loop.Session.Messages()); err != nil {
+					if errorsOut != nil {
+						_, _ = fmt.Fprintf(errorsOut, "notes update failed: %v\n", err)
+					}
+				}
+			}
+		}()
+		return out
+	}
 }
 
 func bindSessionStore(session *chat.Session, store *sessionstore.SessionStore, errorsOut io.Writer) {

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"mewcode/internal/chat"
+	"mewcode/internal/memory"
 	"mewcode/internal/permissions"
 	"mewcode/internal/provider"
 	"mewcode/internal/sessionstore"
@@ -232,6 +233,38 @@ func TestFullscreenAgentPathAppendsSessionStore(t *testing.T) {
 	if strings.Count(string(raw), "\n") != 2 || !strings.Contains(string(raw), "hello") {
 		t.Fatalf("messages jsonl = %s", raw)
 	}
+}
+
+func TestFullscreenSubmitUpdatesNotesEverySixTurns(t *testing.T) {
+	root := t.TempDir()
+	registry, err := tool.DefaultRegistry()
+	if err != nil {
+		t.Fatalf("DefaultRegistry returned error: %v", err)
+	}
+	fp := &scriptedAppProvider{}
+	loop := testLoopForApp(registry, fp, root)
+	updater := &memory.Updater{
+		Notes:    memory.Notes{HomeDir: root, ProjectRoot: root},
+		Provider: &noteProvider{},
+	}
+	submit := newFullscreenSubmit(loop, updater, io.Discard)
+	for turn := 0; turn < memory.NoteUpdateInterval; turn++ {
+		drainTUIEvents(submit(context.Background(), "turn", nil))
+	}
+	if got := updater.Notes.ReadProject(); !strings.Contains(got, "project memory") {
+		t.Fatalf("project notes after six turns = %q", got)
+	}
+}
+
+type noteProvider struct{}
+
+func (p *noteProvider) StreamChat(ctx context.Context, messages []chat.Message, tools []tool.Definition) (<-chan provider.StreamEvent, <-chan error) {
+	events := make(chan provider.StreamEvent, 1)
+	errs := make(chan error, 1)
+	events <- provider.StreamEvent{Kind: provider.EventText, Text: "## 用户级笔记\n- 用户偏好：user memory\n## 项目级笔记\n- 项目知识：project memory"}
+	close(events)
+	errs <- nil
+	return events, errs
 }
 
 func testLoopForApp(registry *tool.Registry, fp provider.Provider, root string) tui.Loop {

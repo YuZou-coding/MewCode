@@ -89,13 +89,6 @@ func TestInstructionsSessionArchiveResumeAndNotesEndToEnd(t *testing.T) {
 	if !strings.Contains(string(metaRaw), `"message_count"`) || !strings.Contains(string(metaRaw), `"updated_at"`) {
 		t.Fatalf("meta = %s", metaRaw)
 	}
-	if !strings.Contains(readFileForE2E(filepath.Join(home, ".mewcode", "notes.md")), "中文回答") {
-		t.Fatalf("user notes not updated")
-	}
-	if !strings.Contains(readFileForE2E(filepath.Join(project, ".mewcode", "notes.md")), "Go 项目") {
-		t.Fatalf("project notes not updated")
-	}
-
 	var resumedBody map[string]any
 	resumeClient := roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		var body map[string]any
@@ -170,33 +163,6 @@ func TestRestoreBadLinesIncompleteToolUseAndTimeGapEndToEnd(t *testing.T) {
 		t.Fatalf("missing time gap reminder: %s", text)
 	}
 	_ = time.Now()
-}
-
-func TestAutomaticNotesAfterSixTurnsEndToEnd(t *testing.T) {
-	project := t.TempDir()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	if err := os.WriteFile(filepath.Join(project, "mewcode.yaml"), []byte(configBody("openai", "gpt-test", "http://provider.test")), 0600); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-	notesCalls := 0
-	client := roundTripFunc(func(r *http.Request) (*http.Response, error) {
-		var body map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Fatalf("decode request: %v", err)
-		}
-		if isNotesRequest(body) {
-			notesCalls++
-			return notesResponse(), nil
-		}
-		return sseResponse("data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\n" +
-			"data: [DONE]\n\n"), nil
-	})
-	input := "one\ntwo\nthree\nfour\nfive\nsix\n/exit\n"
-	_ = runProjectWithHome(t, project, input, provider.WithHTTPClient(client))
-	if notesCalls < 2 {
-		t.Fatalf("notes calls = %d, want interval + exit", notesCalls)
-	}
 }
 
 func runProjectWithHome(t *testing.T, dir string, input string, opts ...provider.Option) string {

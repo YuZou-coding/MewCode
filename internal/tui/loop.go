@@ -61,7 +61,6 @@ type Loop struct {
 	SessionStore      *sessionstore.SessionStore
 	SessionCatalog    sessionstore.Store
 	Notes             *memory.Notes
-	NoteUpdater       *memory.Updater
 	SkillManager      *skill.Manager
 	HookEngine        *hooks.Engine
 	WorkerManager     *worker.Manager
@@ -142,8 +141,6 @@ func (l Loop) Run(ctx context.Context) error {
 	}
 
 	scanner := bufio.NewScanner(input)
-	turns := 0
-	notesCleared := false
 	cmdRegistry, err := command.Builtins()
 	if err != nil {
 		return err
@@ -185,17 +182,9 @@ func (l Loop) Run(ctx context.Context) error {
 				_ = l.HookEngine.Fire(ctx, hooks.Context{Event: hooks.EventSessionEnd})
 				_ = l.HookEngine.Fire(ctx, hooks.Context{Event: hooks.EventSystemExit})
 			}
-			if l.NoteUpdater != nil && !notesCleared && len(session.Messages()) > 0 {
-				if err := l.NoteUpdater.Update(ctx, session.Messages()); err != nil {
-					_, _ = fmt.Fprintf(errorsOut, "notes update failed: %v\n", err)
-				}
-			}
 			return nil
 		}
 		if result.SendToAgent == "" && command.Parse(text).IsCommand {
-			if strings.HasPrefix(text, "/notes clear ") {
-				notesCleared = true
-			}
 			continue
 		}
 		if result.SendToAgent != "" {
@@ -207,13 +196,6 @@ func (l Loop) Run(ctx context.Context) error {
 		}
 		if err := l.runAgentTurn(ctx, scanner, output, errorsOut, session, text, func(usage provider.Usage) { controller.lastUsage = usage }); err != nil {
 			return err
-		}
-		notesCleared = false
-		turns++
-		if l.NoteUpdater != nil {
-			if err := l.NoteUpdater.MaybeUpdate(ctx, turns, session.Messages()); err != nil {
-				_, _ = fmt.Fprintf(errorsOut, "notes update failed: %v\n", err)
-			}
 		}
 	}
 }
