@@ -485,6 +485,17 @@ func (c *Controller) Workers(ctx context.Context, args string) string {
 		return strings.TrimSpace(b.String())
 	}
 	switch fields[0] {
+	case "list":
+		roles := manager.ListRoles()
+		if len(roles) == 0 {
+			return "no worker roles"
+		}
+		var b strings.Builder
+		for _, role := range roles {
+			fmt.Fprintf(&b, "%s | source=%s | description=%s | tools_allow=%s | tools_deny=%s | background_tools=%s | isolation=%s\n",
+				role.Name, role.Source, role.Description, strings.Join(role.ToolsAllow, ","), strings.Join(role.ToolsDeny, ","), strings.Join(role.BackgroundTools, ","), role.Isolation)
+		}
+		return strings.TrimSpace(b.String())
 	case "show":
 		if len(fields) < 2 {
 			return "workers show error: missing task id"
