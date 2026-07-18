@@ -244,10 +244,23 @@ func (m *Manager) ContextMessages() []chat.Message {
 		return nil
 	}
 	notifications := m.DrainNotifications()
-	if len(notifications) == 0 {
-		return nil
-	}
 	var b strings.Builder
+	if len(m.ListRoles()) > 0 {
+		b.WriteString("<mewcode-worker-roles>\n")
+		for _, role := range m.ListRoles() {
+			fmt.Fprintf(&b, "- %s (source=%s): %s\n", role.Name, role.Source, role.Description)
+		}
+		b.WriteString("</mewcode-worker-roles>")
+	}
+	if len(notifications) == 0 {
+		if b.Len() == 0 {
+			return nil
+		}
+		return []chat.Message{prompt.InternalInstruction(b.String())}
+	}
+	if b.Len() > 0 {
+		b.WriteString("\n")
+	}
 	b.WriteString("<mewcode-worker-notifications>\n")
 	for _, n := range notifications {
 		fmt.Fprintf(&b, "- id=%s role=%s status=%s result=%s error=%s\n", n.TaskID, n.Role, n.Status, n.Result, n.Error)

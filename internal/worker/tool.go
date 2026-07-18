@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"encoding/json"
+	"strings"
 
 	"mewcode/internal/tool"
 )
@@ -21,12 +22,22 @@ type runWorkerArgs struct {
 }
 
 func (r RunWorkerTool) Definition() tool.Definition {
+	roleDescription := "Optional worker role. Empty means fork mode."
+	roleProperty := tool.StringProperty(roleDescription)
+	if r.Manager != nil {
+		names := make([]string, 0, len(r.Manager.ListRoles()))
+		for _, role := range r.Manager.ListRoles() {
+			names = append(names, role.Name)
+		}
+		roleProperty["enum"] = names
+		roleProperty["description"] = roleDescription + " Available roles: " + strings.Join(names, ", ") + "."
+	}
 	return tool.Definition{
 		Name:        RunWorkerToolName,
 		Description: "启动一个 MewCode 子工作者执行任务；不指定 role 时使用 Fork 后台模式。",
 		Schema: tool.ObjectSchema([]string{"task"}, map[string]any{
 			"task":           tool.StringProperty("Task for the worker to complete."),
-			"role":           tool.StringProperty("Optional worker role. Empty means fork mode."),
+			"role":           roleProperty,
 			"model":          tool.StringProperty("Optional model override for the worker."),
 			"isolation":      tool.StringProperty("Optional isolation mode: none or worktree."),
 			"max_iterations": map[string]any{"type": "integer", "description": "Optional max agent iterations."},

@@ -96,6 +96,31 @@ func TestFilterDefinitionsRemovesRunWorkerAndAppliesAllowDenyBackground(t *testi
 	}
 }
 
+func TestRunWorkerDefinitionListsAvailableRoles(t *testing.T) {
+	manager := NewManager(LoadResult{Roles: map[string]Role{
+		"explore": {Name: "explore", Description: "Explore", Source: SourceBuiltin},
+		"custom":  {Name: "custom", Description: "Custom review", Source: SourceProject, ToolsAllow: []string{"read_file"}},
+	}}, Options{})
+	schema := RunWorkerTool{Manager: manager}.Definition().Schema
+	role := schema["properties"].(map[string]any)["role"].(map[string]any)
+	if got := role["enum"]; got == nil {
+		t.Fatal("role schema does not expose available roles")
+	}
+	if !strings.Contains(role["description"].(string), "custom") || !strings.Contains(role["description"].(string), "explore") {
+		t.Fatalf("role description = %q", role["description"])
+	}
+}
+
+func TestContextMessagesIncludeAvailableRoles(t *testing.T) {
+	manager := NewManager(LoadResult{Roles: map[string]Role{
+		"custom": {Name: "custom", Description: "Custom review", Source: SourceProject},
+	}}, Options{})
+	messages := manager.ContextMessages()
+	if len(messages) != 1 || !strings.Contains(messages[0].Content, "custom") || !strings.Contains(messages[0].Content, "project") {
+		t.Fatalf("context messages = %#v", messages)
+	}
+}
+
 func TestManagerRunsForegroundBackgroundCancelAndNotifications(t *testing.T) {
 	manager := NewManager(LoadResult{Roles: map[string]Role{"explore": {Name: "explore", Description: "Explore"}}}, Options{BackgroundThreshold: time.Hour})
 	manager.Runner = func(ctx context.Context, req RunRequest) RunResult {
