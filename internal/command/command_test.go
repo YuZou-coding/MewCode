@@ -134,6 +134,14 @@ func TestPanelMatchesCommandsByNameAliasAndGroup(t *testing.T) {
 	if got := panelNames(items); got != "status" {
 		t.Fatalf("alias panel names = %q", got)
 	}
+	items = r.PanelItems("/workers ", 8)
+	if got := panelNames(items); got != "workers cancel,workers list,workers show" {
+		t.Fatalf("worker subcommand panel names = %q", got)
+	}
+	items = r.PanelItems("/workers l", 8)
+	if got := panelNames(items); got != "workers list" {
+		t.Fatalf("worker filtered subcommand panel names = %q", got)
+	}
 }
 
 func panelNames(items []PanelItem) string {

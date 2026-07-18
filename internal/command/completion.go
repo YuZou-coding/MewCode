@@ -25,7 +25,7 @@ func (r *Registry) Complete(input string) Completion {
 	if !strings.HasPrefix(trimmed, "/") {
 		return Completion{}
 	}
-	body := strings.TrimPrefix(trimmed, "/")
+	body := strings.TrimPrefix(strings.TrimLeft(input, " \t"), "/")
 	name, rest, hasSpace := strings.Cut(body, " ")
 	name = normalizeName(name)
 	if hasSpace {
@@ -63,7 +63,41 @@ func (r *Registry) PanelItems(input string, limit int) []PanelItem {
 	if !strings.HasPrefix(trimmed, "/") {
 		return nil
 	}
-	query := normalizeName(strings.TrimPrefix(trimmed, "/"))
+	body := strings.TrimPrefix(strings.TrimLeft(input, " \t"), "/")
+	commandName, subQuery, hasSpace := strings.Cut(body, " ")
+	if hasSpace {
+		cmd, ok := r.Lookup(commandName)
+		if !ok || cmd.Hidden || len(cmd.Subcommands) == 0 {
+			return nil
+		}
+		subQuery = strings.TrimSpace(subQuery)
+		if !strings.HasSuffix(body, " ") {
+			for _, subcommand := range cmd.Subcommands {
+				if subcommand == subQuery {
+					return nil
+				}
+			}
+		}
+		items := make([]PanelItem, 0, len(cmd.Subcommands))
+		for _, subcommand := range cmd.Subcommands {
+			if !strings.HasPrefix(subcommand, subQuery) {
+				continue
+			}
+			items = append(items, PanelItem{
+				Name:        cmd.Name + " " + subcommand,
+				Description: cmd.Description,
+				Usage:       cmd.Usage,
+				Type:        cmd.Type,
+				Group:       commandGroup(cmd.Name),
+			})
+		}
+		sort.Slice(items, func(i, j int) bool { return items[i].Name < items[j].Name })
+		if limit > 0 && len(items) > limit {
+			return items[:limit]
+		}
+		return items
+	}
+	query := normalizeName(commandName)
 	common := map[string]int{
 		"help": 1, "plan": 2, "compact": 3, "sessions": 4,
 		"resume": 5, "status": 6, "clear": 7, "exit": 8,
