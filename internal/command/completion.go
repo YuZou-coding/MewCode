@@ -65,6 +65,12 @@ func (r *Registry) PanelItems(input string, limit int) []PanelItem {
 	}
 	body := strings.TrimPrefix(strings.TrimLeft(input, " \t"), "/")
 	commandName, subQuery, hasSpace := strings.Cut(body, " ")
+	if !hasSpace {
+		if cmd, ok := r.Lookup(commandName); ok && !cmd.Hidden && len(cmd.Subcommands) > 0 {
+			hasSpace = true
+			subQuery = ""
+		}
+	}
 	if hasSpace {
 		cmd, ok := r.Lookup(commandName)
 		if !ok || cmd.Hidden || len(cmd.Subcommands) == 0 {

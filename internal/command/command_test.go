@@ -125,6 +125,10 @@ func TestPanelMatchesCommandsByNameAliasAndGroup(t *testing.T) {
 	if got := panelNames(items); got != "workers,worktrees" {
 		t.Fatalf("panel names = %q", got)
 	}
+	items = r.PanelItems("/workers", 8)
+	if got := panelNames(items); got != "workers cancel,workers list,workers show" {
+		t.Fatalf("exact worker command panel names = %q", got)
+	}
 	for _, item := range items {
 		if item.Description == "" || item.Usage == "" || item.Group == "" {
 			t.Fatalf("incomplete panel item: %#v", item)
