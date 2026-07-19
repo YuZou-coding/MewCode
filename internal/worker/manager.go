@@ -101,6 +101,8 @@ func (m *Manager) Run(ctx context.Context, req RunRequest) ToolRunResult {
 	select {
 	case <-completed:
 		return m.resultForTask(task.ID, false)
+	case <-time.After(m.Options.BackgroundThreshold):
+		return ToolRunResult{OK: true, TaskID: task.ID, Background: true, Status: StatusRunning}
 	case <-ctx.Done():
 		cancel()
 		return ToolRunResult{OK: false, TaskID: task.ID, Error: ctx.Err().Error()}

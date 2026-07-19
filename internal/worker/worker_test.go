@@ -160,7 +160,7 @@ func TestManagerRunsForegroundBackgroundCancelAndNotifications(t *testing.T) {
 	close(block)
 }
 
-func TestManagerWaitsForForegroundWorkerToComplete(t *testing.T) {
+func TestManagerMovesSlowForegroundWorkerToBackgroundWithoutRestart(t *testing.T) {
 	manager := NewManager(LoadResult{Roles: map[string]Role{"explore": {Name: "explore"}}}, Options{BackgroundThreshold: time.Millisecond})
 	started := make(chan struct{}, 1)
 	release := make(chan struct{})
@@ -172,18 +172,27 @@ func TestManagerWaitsForForegroundWorkerToComplete(t *testing.T) {
 		return RunResult{Text: "finished"}
 	}
 
-	resultCh := make(chan ToolRunResult, 1)
-	go func() { resultCh <- manager.Run(context.Background(), RunRequest{Task: "slow", RoleName: "explore"}) }()
+	result := manager.Run(context.Background(), RunRequest{Task: "slow", RoleName: "explore"})
 	<-started
-	select {
-	case result := <-resultCh:
-		t.Fatalf("foreground run returned early: %#v", result)
-	case <-time.After(20 * time.Millisecond):
+	if !result.OK || !result.Background || result.Status != StatusRunning || result.TaskID == "" {
+		t.Fatalf("result = %#v", result)
+	}
+	if runs != 1 {
+		t.Fatalf("worker restarted: runs=%d", runs)
 	}
 	close(release)
-	result := <-resultCh
-	if !result.OK || result.Background || result.Status != StatusCompleted || result.Result != "finished" {
-		t.Fatalf("result = %#v", result)
+	deadline := time.After(time.Second)
+	for {
+		task, _ := manager.Task(result.TaskID)
+		if task.Status == StatusCompleted {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("task did not complete: %#v", task)
+		default:
+			time.Sleep(time.Millisecond)
+		}
 	}
 	if runs != 1 {
 		t.Fatalf("worker restarted after background handoff: runs=%d", runs)
