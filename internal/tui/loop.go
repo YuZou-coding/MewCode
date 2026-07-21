@@ -201,6 +201,7 @@ func (l Loop) Run(ctx context.Context) error {
 			for _, notification := range l.WorkerManager.PendingNotifications() {
 				fmt.Fprintf(output, "MewCode > worker %s %s: %s\n", notification.TaskID, notification.Status, notificationResult(notification))
 			}
+			l.WorkerManager.DrainNotifications()
 		}
 	}
 }

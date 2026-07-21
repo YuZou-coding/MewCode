@@ -275,7 +275,7 @@ func (m *Manager) ContextMessages() []chat.Message {
 	if m == nil {
 		return nil
 	}
-	notifications := m.DrainNotifications()
+	notifications := m.PendingNotifications()
 	var b strings.Builder
 	if len(m.ListRoles()) > 0 {
 		b.WriteString("<mewcode-worker-roles>\n")

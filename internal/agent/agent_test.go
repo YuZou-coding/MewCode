@@ -447,8 +447,8 @@ func TestAgentInjectsWorkerNotificationsWithoutSessionLeak(t *testing.T) {
 	if strings.Contains(messagesText(session.Messages()), "worker_1") {
 		t.Fatalf("worker notification leaked into session: %#v", session.Messages())
 	}
-	if len(manager.DrainNotifications()) != 0 {
-		t.Fatalf("notification should have been drained")
+	if len(manager.DrainNotifications()) != 1 {
+		t.Fatalf("notification should remain available for UI handoff")
 	}
 }
 

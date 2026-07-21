@@ -337,6 +337,7 @@ func newFullscreenSubmit(loop tui.Loop, updater *memory.Updater, errorsOut io.Wr
 				for _, notification := range loop.WorkerManager.PendingNotifications() {
 					out <- tuiapp.StreamEvent{Kind: tuiapp.StreamTextDelta, Text: fmt.Sprintf("worker %s %s: %s\n", notification.TaskID, notification.Status, workerNotificationResult(notification))}
 				}
+				loop.WorkerManager.DrainNotifications()
 			}
 			out <- tuiapp.StreamEvent{Kind: tuiapp.StreamDone}
 			turns++
