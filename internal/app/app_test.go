@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"mewcode/internal/chat"
 	"mewcode/internal/memory"
@@ -17,6 +18,7 @@ import (
 	"mewcode/internal/tool"
 	"mewcode/internal/tui"
 	"mewcode/internal/tuiapp"
+	"mewcode/internal/worker"
 )
 
 type appProvider struct{}
@@ -253,6 +255,47 @@ func TestFullscreenSubmitUpdatesNotesEverySixTurns(t *testing.T) {
 	}
 	if got := updater.Notes.ReadProject(); !strings.Contains(got, "project memory") {
 		t.Fatalf("project notes after six turns = %q", got)
+	}
+}
+
+func TestFullscreenSubmitWaitsAndEmitsWorkerResultBeforeDone(t *testing.T) {
+	registry, err := tool.DefaultRegistry()
+	if err != nil {
+		t.Fatalf("DefaultRegistry returned error: %v", err)
+	}
+	release := make(chan struct{})
+	manager := worker.NewManager(worker.LoadResult{Roles: map[string]worker.Role{"explore": {Name: "explore"}}}, worker.Options{BackgroundThreshold: time.Millisecond})
+	manager.Runner = func(ctx context.Context, req worker.RunRequest) worker.RunResult {
+		<-release
+		return worker.RunResult{Text: "explore report"}
+	}
+	started := manager.Run(context.Background(), worker.RunRequest{Task: "inspect", RoleName: "explore", Background: true})
+	if !started.OK || !started.Background {
+		t.Fatalf("start result = %#v", started)
+	}
+	loop := testLoopForApp(registry, appProvider{}, t.TempDir())
+	loop.WorkerManager = manager
+	submit := newFullscreenSubmit(loop, nil, io.Discard)
+	returned := make(chan (<-chan tuiapp.StreamEvent), 1)
+	go func() { returned <- submit(context.Background(), "next", nil) }()
+	select {
+	case <-returned:
+		t.Fatal("submit returned before worker completed")
+	case <-time.After(20 * time.Millisecond):
+	}
+	close(release)
+	events := drainTUIEvents(<-returned)
+	resultIndex, doneIndex := -1, -1
+	for index, event := range events {
+		if event.Kind == tuiapp.StreamTextDelta && strings.Contains(event.Text, "explore report") {
+			resultIndex = index
+		}
+		if event.Kind == tuiapp.StreamDone {
+			doneIndex = index
+		}
+	}
+	if resultIndex < 0 || doneIndex < 0 || resultIndex > doneIndex {
+		t.Fatalf("events = %#v", events)
 	}
 }
 
