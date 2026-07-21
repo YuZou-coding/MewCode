@@ -56,6 +56,20 @@ func TestLoadDiscoversRolesAndAppliesPriority(t *testing.T) {
 	}
 }
 
+func TestBuiltinExploreRequiresEvidenceBackedReport(t *testing.T) {
+	var explore Role
+	for _, role := range Builtins(false) {
+		if role.Name == "explore" {
+			explore = role
+		}
+	}
+	for _, required := range []string{"实际调用", "入口", "目录职责", "关键数据流", "测试", "文件路径", "禁止只返回计划"} {
+		if !strings.Contains(explore.Body, required) {
+			t.Fatalf("explore body missing %q: %s", required, explore.Body)
+		}
+	}
+}
+
 func TestParseFrontmatterFields(t *testing.T) {
 	role, err := ParseMarkdown("worker.md", SourceProject, []byte(`---
 name: Explore

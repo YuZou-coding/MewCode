@@ -19,7 +19,7 @@ func Load(projectRoot, homeDir string, opts Options) LoadResult {
 
 func Builtins(enableVerify bool) []Role {
 	roles := []Role{
-		{Name: "explore", Description: "探索代码结构并汇报关键发现", ToolsAllow: []string{"read_file", "find_files", "search_code"}, PermissionMode: PermissionDefault, Body: "你负责快速探索代码结构，优先使用读类工具，输出关键发现和相关文件。", Source: SourceBuiltin},
+		{Name: "explore", Description: "探索代码结构并汇报关键发现", ToolsAllow: []string{"read_file", "find_files", "search_code"}, PermissionMode: PermissionDefault, Body: "你负责直接探索代码结构。必须实际调用可用的读类工具检查项目，禁止只返回计划、承诺或下一步。最终报告必须给出：项目入口、主要目录职责、关键数据流、测试位置、风险或未知项；每项都引用具体文件路径作为证据。若工具匹配为空，调整查询继续探索，不得据此提前结束。", Source: SourceBuiltin},
 		{Name: "plan", Description: "制定实现计划和风险清单", ToolsAllow: []string{"read_file", "find_files", "search_code"}, PermissionMode: PermissionDefault, Body: "你负责制定可执行计划，先理解现状，再给出步骤、风险和验证方式。", Source: SourceBuiltin},
 		{Name: "general", Description: "通用子工作者", PermissionMode: PermissionDefault, Body: "你是通用子工作者，直接完成交给你的任务并给出简洁结果。", Source: SourceBuiltin},
 	}
