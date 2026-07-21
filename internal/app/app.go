@@ -333,7 +333,7 @@ func newFullscreenSubmit(loop tui.Loop, updater *memory.Updater, errorsOut io.Wr
 				}
 			}
 			if loop.WorkerManager != nil {
-				loop.WorkerManager.WaitForRunning(ctx)
+				loop.WorkerManager.WaitForRunning(context.Background())
 				for _, notification := range loop.WorkerManager.PendingNotifications() {
 					out <- tuiapp.StreamEvent{Kind: tuiapp.StreamTextDelta, Text: fmt.Sprintf("worker %s %s: %s\n", notification.TaskID, notification.Status, workerNotificationResult(notification))}
 				}

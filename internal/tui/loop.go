@@ -197,7 +197,7 @@ func (l Loop) Run(ctx context.Context) error {
 			return err
 		}
 		if l.WorkerManager != nil {
-			l.WorkerManager.WaitForRunning(ctx)
+			l.WorkerManager.WaitForRunning(context.Background())
 			for _, notification := range l.WorkerManager.PendingNotifications() {
 				fmt.Fprintf(output, "MewCode > worker %s %s: %s\n", notification.TaskID, notification.Status, notificationResult(notification))
 			}
