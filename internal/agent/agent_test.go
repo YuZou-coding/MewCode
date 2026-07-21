@@ -493,6 +493,48 @@ func TestAgentWaitsForBackgroundWorkersBeforeFinalResponse(t *testing.T) {
 	}
 }
 
+func TestAgentCollectsWorkerStartedByRunWorkerToolBeforeFinalResponse(t *testing.T) {
+	manager := worker.NewManager(worker.LoadResult{Roles: map[string]worker.Role{
+		"explore": {Name: "explore"},
+	}}, worker.Options{BackgroundThreshold: time.Millisecond})
+	started := make(chan struct{})
+	release := make(chan struct{})
+	manager.Runner = func(ctx context.Context, req worker.RunRequest) worker.RunResult {
+		close(started)
+		<-release
+		return worker.RunResult{Text: "integrated explore report"}
+	}
+	registry := tool.NewRegistry()
+	if err := worker.RegisterTools(registry, manager); err != nil {
+		t.Fatalf("RegisterTools: %v", err)
+	}
+	args, _ := json.Marshal(map[string]any{"task": "inspect", "role": "explore"})
+	provider := &fakeProvider{series: [][]provider.StreamEvent{
+		{{Kind: provider.EventToolCall, ToolCall: &provider.ToolCall{ID: "worker-call", Name: worker.RunWorkerToolName, Arguments: args}}},
+		{{Kind: provider.EventText, Text: "worker started"}},
+	}}
+	agent := &Agent{Provider: provider, Registry: registry, Tools: registry.Definitions(), Session: chat.NewSession(), WorkerManager: manager}
+	eventsCh := make(chan []Event, 1)
+	go func() { eventsCh <- collect(agent.Run(context.Background(), "explore")) }()
+	<-started
+	select {
+	case events := <-eventsCh:
+		t.Fatalf("agent finalized before integrated worker completed: %#v", events)
+	case <-time.After(20 * time.Millisecond):
+	}
+	close(release)
+	events := <-eventsCh
+	var final string
+	for _, event := range events {
+		if event.Kind == EventFinalResponse {
+			final = event.Text
+		}
+	}
+	if !strings.Contains(final, "integrated explore report") {
+		t.Fatalf("final response = %q; events = %#v", final, events)
+	}
+}
+
 func TestAgentRunWorkerToolReturnsForegroundResult(t *testing.T) {
 	manager := worker.NewManager(worker.LoadResult{Roles: map[string]worker.Role{
 		"explore": {Name: "explore", Description: "Explore"},
