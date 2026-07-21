@@ -525,13 +525,20 @@ func TestAgentCollectsWorkerStartedByRunWorkerToolBeforeFinalResponse(t *testing
 	close(release)
 	events := <-eventsCh
 	var final string
+	var streamed string
 	for _, event := range events {
 		if event.Kind == EventFinalResponse {
 			final = event.Text
 		}
+		if event.Kind == EventStreamText {
+			streamed += event.Text
+		}
 	}
 	if !strings.Contains(final, "integrated explore report") {
 		t.Fatalf("final response = %q; events = %#v", final, events)
+	}
+	if !strings.Contains(streamed, "integrated explore report") {
+		t.Fatalf("streamed response = %q; events = %#v", streamed, events)
 	}
 }
 

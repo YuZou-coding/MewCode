@@ -143,6 +143,9 @@ func (a *Agent) run(ctx context.Context, userText string, events chan<- Event) {
 			if ctx.Err() != nil {
 				return
 			}
+			if workerReport != "" {
+				sendEvent(ctx, events, Event{Kind: EventStreamText, Text: workerReport})
+			}
 			session.AddAssistant(assistantText)
 			a.fireHook(ctx, hooks.Context{Event: hooks.EventTurnEnd, MessageContent: assistantText})
 			a.fireHook(ctx, hooks.Context{Event: hooks.EventSessionEnd})
