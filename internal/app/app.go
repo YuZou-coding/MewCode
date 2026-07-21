@@ -420,10 +420,6 @@ func runAgentForTUI(ctx context.Context, loop tui.Loop, text string, permissionP
 			case out <- streamEvent:
 			}
 		}
-		select {
-		case <-ctx.Done():
-		case out <- tuiapp.StreamEvent{Kind: tuiapp.StreamDone}:
-		}
 	}()
 	return out
 }
