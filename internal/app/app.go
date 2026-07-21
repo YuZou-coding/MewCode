@@ -542,11 +542,14 @@ func (a App) workerRunner(registry *tool.Registry, checker *permissions.Checker,
 			TeamManager:       nil,
 		}
 		var final string
+		var streamed strings.Builder
 		var usage provider.Usage
 		for event := range runner.Run(ctx, req.Task) {
 			switch event.Kind {
 			case agent.EventFinalResponse:
 				final = event.Text
+			case agent.EventStreamText:
+				streamed.WriteString(event.Text)
 			case agent.EventUsage:
 				usage.InputTokens += event.Usage.InputTokens
 				usage.OutputTokens += event.Usage.OutputTokens
@@ -557,6 +560,9 @@ func (a App) workerRunner(registry *tool.Registry, checker *permissions.Checker,
 					return worker.RunResult{Text: final, Usage: usage, Error: event.Error}
 				}
 			}
+		}
+		if strings.TrimSpace(final) == "" {
+			final = streamed.String()
 		}
 		if strings.TrimSpace(final) == "" {
 			final = "(empty)"
