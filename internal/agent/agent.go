@@ -123,8 +123,22 @@ func (a *Agent) run(ctx context.Context, userText string, events chan<- Event) {
 		a.fireHook(ctx, hooks.Context{Event: hooks.EventMessageAfterRecv, MessageContent: assistantText})
 		finalText = assistantText
 		if len(calls) == 0 {
+			workerReport := ""
 			if a.WorkerManager != nil {
 				a.WorkerManager.WaitForRunning(context.Background())
+				notifications := a.WorkerManager.PendingNotifications()
+				if len(notifications) > 0 {
+					var report strings.Builder
+					for _, notification := range notifications {
+						result := notification.Result
+						if notification.Error != "" {
+							result = notification.Error
+						}
+						fmt.Fprintf(&report, "\nworker %s %s: %s", notification.TaskID, notification.Status, result)
+					}
+					workerReport = report.String()
+					a.WorkerManager.DrainNotifications()
+				}
 			}
 			if ctx.Err() != nil {
 				return
@@ -132,7 +146,7 @@ func (a *Agent) run(ctx context.Context, userText string, events chan<- Event) {
 			session.AddAssistant(assistantText)
 			a.fireHook(ctx, hooks.Context{Event: hooks.EventTurnEnd, MessageContent: assistantText})
 			a.fireHook(ctx, hooks.Context{Event: hooks.EventSessionEnd})
-			sendEvent(ctx, events, Event{Kind: EventFinalResponse, Text: assistantText})
+			sendEvent(ctx, events, Event{Kind: EventFinalResponse, Text: assistantText + workerReport})
 			return
 		}
 

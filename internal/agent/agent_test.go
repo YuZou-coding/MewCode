@@ -447,8 +447,8 @@ func TestAgentInjectsWorkerNotificationsWithoutSessionLeak(t *testing.T) {
 	if strings.Contains(messagesText(session.Messages()), "worker_1") {
 		t.Fatalf("worker notification leaked into session: %#v", session.Messages())
 	}
-	if len(manager.DrainNotifications()) != 1 {
-		t.Fatalf("notification should remain available for UI handoff")
+	if len(manager.DrainNotifications()) != 0 {
+		t.Fatalf("notification should be consumed after final response")
 	}
 }
 
@@ -466,8 +466,9 @@ func TestAgentWaitsForBackgroundWorkersBeforeFinalResponse(t *testing.T) {
 	provider := &fakeProvider{series: [][]provider.StreamEvent{{{Kind: provider.EventText, Text: "main response"}}}}
 	agent := &Agent{Provider: provider, Session: chat.NewSession(), WorkerManager: manager}
 	done := make(chan struct{})
+	var events []Event
 	go func() {
-		drain(agent.Run(context.Background(), "next"))
+		events = collect(agent.Run(context.Background(), "next"))
 		close(done)
 	}()
 	select {
@@ -480,6 +481,15 @@ func TestAgentWaitsForBackgroundWorkersBeforeFinalResponse(t *testing.T) {
 	case <-done:
 	case <-time.After(time.Second):
 		t.Fatal("agent did not finalize after worker completed")
+	}
+	var final string
+	for _, event := range events {
+		if event.Kind == EventFinalResponse {
+			final = event.Text
+		}
+	}
+	if !strings.Contains(final, "background report") {
+		t.Fatalf("worker result missing from final response: %#v", events)
 	}
 }
 
