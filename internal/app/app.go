@@ -323,6 +323,9 @@ func newFullscreenSubmit(loop tui.Loop, updater *memory.Updater, errorsOut io.Wr
 		go func() {
 			defer close(out)
 			for event := range source {
+				if event.Kind == tuiapp.StreamDone {
+					continue
+				}
 				select {
 				case <-ctx.Done():
 					return
@@ -335,6 +338,7 @@ func newFullscreenSubmit(loop tui.Loop, updater *memory.Updater, errorsOut io.Wr
 					out <- tuiapp.StreamEvent{Kind: tuiapp.StreamTextDelta, Text: fmt.Sprintf("worker %s %s: %s\n", notification.TaskID, notification.Status, workerNotificationResult(notification))}
 				}
 			}
+			out <- tuiapp.StreamEvent{Kind: tuiapp.StreamDone}
 			turns++
 			if updater != nil {
 				if err := updater.MaybeUpdate(ctx, turns, loop.Session.Messages()); err != nil {
