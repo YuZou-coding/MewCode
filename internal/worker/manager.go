@@ -86,11 +86,10 @@ func (m *Manager) Run(ctx context.Context, req RunRequest) ToolRunResult {
 	if m.Runner == nil {
 		return ToolRunResult{OK: false, Error: "worker runner is not configured"}
 	}
-	workerParent := ctx
-	if req.Background {
-		workerParent = context.WithoutCancel(ctx)
-	}
-	taskCtx, cancel := context.WithCancel(workerParent)
+	// A foreground worker may cross the threshold and continue in the background.
+	// Detach it from the tool-call context up front; explicit cancellation still
+	// flows through the task cancel function below.
+	taskCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	task := m.createTask(req, cancel)
 	req.TaskID = task.ID
 	completed := make(chan struct{})

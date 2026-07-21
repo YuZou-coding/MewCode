@@ -267,6 +267,31 @@ func TestBackgroundWorkerSurvivesToolContextCancellation(t *testing.T) {
 	}
 }
 
+func TestAutoBackgroundWorkerSurvivesToolContextCancellation(t *testing.T) {
+	manager := NewManager(LoadResult{Roles: map[string]Role{"explore": {Name: "explore"}}}, Options{BackgroundThreshold: time.Millisecond})
+	release := make(chan struct{})
+	manager.Runner = func(ctx context.Context, req RunRequest) RunResult {
+		select {
+		case <-release:
+			return RunResult{Text: "auto background report"}
+		case <-ctx.Done():
+			return RunResult{Error: ctx.Err()}
+		}
+	}
+	toolCtx, cancel := context.WithCancel(context.Background())
+	result := manager.Run(toolCtx, RunRequest{Task: "inspect", RoleName: "explore"})
+	if !result.OK || !result.Background || result.Status != StatusRunning {
+		t.Fatalf("result = %#v", result)
+	}
+	cancel()
+	close(release)
+	manager.WaitForRunning(context.Background())
+	notifications := manager.DrainNotifications()
+	if len(notifications) != 1 || notifications[0].Status != string(StatusCompleted) || notifications[0].Result != "auto background report" {
+		t.Fatalf("notifications = %#v", notifications)
+	}
+}
+
 func TestRunWorkerToolUsesRoleAndForkDefaults(t *testing.T) {
 	manager := NewManager(LoadResult{Roles: map[string]Role{"explore": {Name: "explore"}}}, Options{})
 	var requests []RunRequest
