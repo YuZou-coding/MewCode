@@ -86,7 +86,11 @@ func (m *Manager) Run(ctx context.Context, req RunRequest) ToolRunResult {
 	if m.Runner == nil {
 		return ToolRunResult{OK: false, Error: "worker runner is not configured"}
 	}
-	taskCtx, cancel := context.WithCancel(ctx)
+	workerParent := ctx
+	if req.Background {
+		workerParent = context.WithoutCancel(ctx)
+	}
+	taskCtx, cancel := context.WithCancel(workerParent)
 	task := m.createTask(req, cancel)
 	req.TaskID = task.ID
 	completed := make(chan struct{})

@@ -232,6 +232,27 @@ func TestWaitForRunningWorkersBlocksUntilCompletion(t *testing.T) {
 	}
 }
 
+func TestBackgroundWorkerSurvivesToolContextCancellation(t *testing.T) {
+	manager := NewManager(LoadResult{Roles: map[string]Role{"explore": {Name: "explore"}}}, Options{})
+	started := make(chan struct{})
+	manager.Runner = func(ctx context.Context, req RunRequest) RunResult {
+		close(started)
+		return RunResult{Text: "explore result"}
+	}
+	toolCtx, cancel := context.WithCancel(context.Background())
+	result := manager.Run(toolCtx, RunRequest{Task: "inspect", RoleName: "explore", Background: true})
+	if !result.OK || !result.Background {
+		t.Fatalf("result = %#v", result)
+	}
+	cancel()
+	<-started
+	manager.WaitForRunning(context.Background())
+	notifications := manager.DrainNotifications()
+	if len(notifications) != 1 || notifications[0].Result != "explore result" {
+		t.Fatalf("notifications = %#v", notifications)
+	}
+}
+
 func TestRunWorkerToolUsesRoleAndForkDefaults(t *testing.T) {
 	manager := NewManager(LoadResult{Roles: map[string]Role{"explore": {Name: "explore"}}}, Options{})
 	var requests []RunRequest
