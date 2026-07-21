@@ -123,6 +123,9 @@ func (a *Agent) run(ctx context.Context, userText string, events chan<- Event) {
 		a.fireHook(ctx, hooks.Context{Event: hooks.EventMessageAfterRecv, MessageContent: assistantText})
 		finalText = assistantText
 		if len(calls) == 0 {
+			if a.WorkerManager != nil {
+				a.WorkerManager.WaitForRunning(context.Background())
+			}
 			if ctx.Err() != nil {
 				return
 			}

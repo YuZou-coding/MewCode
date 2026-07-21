@@ -452,6 +452,37 @@ func TestAgentInjectsWorkerNotificationsWithoutSessionLeak(t *testing.T) {
 	}
 }
 
+func TestAgentWaitsForBackgroundWorkersBeforeFinalResponse(t *testing.T) {
+	manager := worker.NewManager(worker.LoadResult{Roles: map[string]worker.Role{}}, worker.Options{})
+	release := make(chan struct{})
+	manager.Runner = func(ctx context.Context, req worker.RunRequest) worker.RunResult {
+		<-release
+		return worker.RunResult{Text: "background report"}
+	}
+	started := manager.Run(context.Background(), worker.RunRequest{Task: "inspect", Background: true})
+	if !started.OK || !started.Background {
+		t.Fatalf("start result = %#v", started)
+	}
+	provider := &fakeProvider{series: [][]provider.StreamEvent{{{Kind: provider.EventText, Text: "main response"}}}}
+	agent := &Agent{Provider: provider, Session: chat.NewSession(), WorkerManager: manager}
+	done := make(chan struct{})
+	go func() {
+		drain(agent.Run(context.Background(), "next"))
+		close(done)
+	}()
+	select {
+	case <-done:
+		t.Fatal("agent finalized before background worker completed")
+	case <-time.After(20 * time.Millisecond):
+	}
+	close(release)
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("agent did not finalize after worker completed")
+	}
+}
+
 func TestAgentRunWorkerToolReturnsForegroundResult(t *testing.T) {
 	manager := worker.NewManager(worker.LoadResult{Roles: map[string]worker.Role{
 		"explore": {Name: "explore", Description: "Explore"},
